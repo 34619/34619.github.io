@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="description" content="小陈的个人网站 - 分享生活、技术交流、在线论坛与即时聊天">
+<meta name="author" content="小陈">
+<meta name="theme-color" content="#0a0a14">
+<meta property="og:title" content="小陈的个人网站">
+<meta property="og:description" content="分享生活、技术交流、在线论坛与即时聊天">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://s21.ax1x.com/2024/09/17/pAKEpY6.jpg">
 <title>小陈的个人网站</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>">
 <script>
@@ -547,6 +554,127 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opac
 .music-body{padding:14px}
 .music-cover{margin-bottom:12px}
 }
+
+/* ===== 亮色主题 ===== */
+[data-theme="light"]{
+--bg-body:url(https://s21.ax1x.com/2024/09/17/pAKEpY6.jpg) no-repeat center/cover;
+--bg-sidebar:rgba(255,255,255,0.82);--bg-topbar:rgba(255,255,255,0.7);
+--bg-card:rgba(0,0,0,0.04);--bg-card-hover:rgba(0,0,0,0.08);
+--bg-input:rgba(0,0,0,0.04);--bg-input-focus:rgba(0,0,0,0.06);
+--bg-nav:transparent;--bg-nav-hover:rgba(0,0,0,0.04);--bg-nav-active:rgba(32,178,170,0.1);
+--bg-modal:rgba(245,245,250,0.96);
+--bg-bubble-sent:linear-gradient(135deg,#20b2aa,#1a9e96);--bg-bubble-recv:rgba(0,0,0,0.06);
+--bg-chatbar:rgba(255,255,255,0.7);
+--bg-section-card:rgba(0,0,0,0.03);--bg-section-card-hover:rgba(0,0,0,0.07);
+--bg-post-item:rgba(0,0,0,0.02);--bg-post-hover:rgba(0,0,0,0.05);--bg-post-pinned:rgba(32,178,170,0.06);
+--bg-desc:rgba(0,0,0,0.03);--bg-detail-card:rgba(0,0,0,0.03);
+--bg-avatar:rgba(0,0,0,0.06);--bg-overlay:rgba(255,255,255,0.6);--bg-badge:#ff6b6b;
+--text-1:#1a1a2e;--text-2:rgba(26,26,46,0.7);--text-3:rgba(26,26,46,0.45);--text-4:rgba(26,26,46,0.3);
+--text-placeholder:rgba(26,26,46,0.22);--text-placeholder2:rgba(26,26,46,0.3);
+--border-1:rgba(0,0,0,0.08);--border-2:rgba(0,0,0,0.12);--border-3:rgba(0,0,0,0.18);--border-avatar:rgba(0,0,0,0.12);
+--accent:lightseagreen;--accent-soft:rgba(32,178,170,0.15);--danger:#ff6b6b;--success:#51cf66;
+--shadow-sm:0 2px 8px rgba(0,0,0,0.08);--shadow-md:0 8px 32px rgba(0,0,0,0.1);--shadow-lg:0 16px 48px rgba(0,0,0,0.12);--shadow-glow:0 0 20px rgba(32,178,170,0.1);
+--avatar-color:lightseagreen;--stat-color:rgba(26,26,46,0.65);--body-color:rgba(26,26,46,0.85);--bio-color:rgba(26,26,46,0.8);
+--scrollbar:rgba(0,0,0,0.1);--scrollbar-hover:rgba(0,0,0,0.2);
+--title-glow:0 0 10px var(--accent),0 0 20px var(--accent);
+--noise-opacity:0.015}
+
+/* ===== 首页 ===== */
+.home-hero{
+background:var(--bg-card);border:1px solid var(--border-1);border-radius:16px;
+padding:40px 32px;text-align:center;margin-bottom:24px;
+position:relative;overflow:hidden;
+}
+.home-hero::before{
+content:'';position:absolute;inset:0;
+background:linear-gradient(135deg,rgba(32,178,170,0.06),transparent 60%);
+pointer-events:none;
+}
+.home-hero-title{
+font-size:clamp(24px,4vw,36px);font-weight:800;color:var(--text-1);
+margin-bottom:12px;letter-spacing:1px;
+}
+.home-hero-title span{color:var(--accent)}
+.home-hero-desc{
+font-size:15px;color:var(--text-3);line-height:1.7;max-width:520px;margin:0 auto 24px;
+}
+.home-hero-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.home-hero-actions button{min-width:120px}
+.home-welcome{font-size:14px;color:var(--text-2);margin-bottom:16px}
+.home-welcome strong{color:var(--accent)}
+
+.home-section-title{
+font-size:18px;font-weight:700;color:var(--text-1);margin:28px 0 16px;
+display:flex;align-items:center;gap:8px;
+}
+.home-section-title::after{
+content:'';flex:1;height:1px;background:var(--border-1);
+}
+
+.home-features{
+display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:24px;
+}
+.home-feature-card{
+background:var(--bg-section-card);border:1px solid var(--border-1);border-radius:14px;
+padding:24px 20px;cursor:pointer;transition:all 0.3s cubic-bezier(0.16,1,0.3,1);text-align:center;
+}
+.home-feature-card:hover{
+background:var(--bg-section-card-hover);transform:translateY(-4px);
+border-color:var(--accent);box-shadow:var(--shadow-md),var(--shadow-glow);
+}
+.home-feature-icon{font-size:36px;margin-bottom:10px}
+.home-feature-name{font-size:15px;font-weight:700;color:var(--text-1);margin-bottom:6px}
+.home-feature-desc{font-size:12px;color:var(--text-3);line-height:1.5}
+
+.home-stats{
+display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px;margin-bottom:24px;
+}
+.home-stat-card{
+background:var(--bg-card);border:1px solid var(--border-1);border-radius:12px;
+padding:20px 16px;text-align:center;
+}
+.home-stat-num{font-size:28px;font-weight:800;color:var(--accent);margin-bottom:4px}
+.home-stat-label{font-size:12px;color:var(--text-3);font-weight:500}
+
+.home-footer{
+text-align:center;padding:32px 16px 20px;color:var(--text-4);font-size:12px;
+border-top:1px solid var(--border-1);margin-top:32px;
+}
+.home-footer a{color:var(--accent);text-decoration:none}
+
+/* ===== 回到顶部按钮 ===== */
+.back-to-top{
+position:fixed;bottom:28px;right:28px;z-index:90;
+width:44px;height:44px;border-radius:50%;border:none;
+background:rgba(10,10,20,0.7);backdrop-filter:blur(12px);
+color:var(--text-1);font-size:20px;cursor:pointer;
+box-shadow:var(--shadow-md);transition:all 0.3s;
+opacity:0;transform:translateY(20px);pointer-events:none;
+}
+.back-to-top.visible{opacity:1;transform:translateY(0);pointer-events:auto}
+.back-to-top:hover{background:var(--accent);color:#fff;transform:scale(1.1)}
+[data-theme="light"] .back-to-top{background:rgba(255,255,255,0.85);border:1px solid var(--border-2)}
+
+/* ===== 主题切换按钮 ===== */
+.theme-toggle{
+background:none;border:1px solid var(--border-2);border-radius:8px;
+color:var(--text-2);font-size:16px;cursor:pointer;padding:6px 10px;
+transition:all 0.25s;display:flex;align-items:center;gap:4px;
+}
+.theme-toggle:hover{border-color:var(--accent);color:var(--text-1)}
+.theme-toggle-label{font-size:12px}
+.topbar .theme-toggle{position:absolute;right:16px}
+
+@media(max-width:768px){
+.home-hero{padding:28px 20px}
+.home-hero-title{font-size:22px}
+.home-features{grid-template-columns:1fr 1fr}
+.home-stats{grid-template-columns:1fr 1fr}
+.back-to-top{bottom:20px;right:20px;width:40px;height:40px}
+}
+@media(max-width:480px){
+.home-features{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body class="flex">
@@ -625,10 +753,57 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opac
 </div>
 
 <div class="main-area">
-<div class="topbar"><div class="header-title"><p class="site-title">小陈的个人网站</p></div></div>
+<div class="topbar" style="display:flex;align-items:center;justify-content:center;position:relative">
+<div class="header-title"><p class="site-title">小陈的个人网站</p></div>
+<button class="theme-toggle" id="themeToggle" title="切换主题"><span id="themeIcon">&#9790;</span><span class="theme-toggle-label" id="themeLabel">亮色</span></button>
+</div>
 <div class="content-scroll" id="homePage">
-<div style="flex:3" class="flex column"><div class="flex"><div style="height:100px;flex:1;margin:8px 8px 0 8px;background:var(--bg-card);border:1px solid var(--border-1);border-radius:10px"></div><div style="height:100px;flex:1;margin:8px 8px 0 0;background:var(--bg-card);border:1px solid var(--border-1);border-radius:10px"></div><div style="height:100px;flex:1;margin:8px 8px 0 0;background:var(--bg-card);border:1px solid var(--border-1);border-radius:10px"></div><div style="height:100px;flex:1;margin:8px 8px 0 0;background:var(--bg-card);border:1px solid var(--border-1);border-radius:10px"></div></div><div class="flex column"><div style="height:160px;margin:8px;background:var(--bg-card);border:1px solid var(--border-1);border-radius:10px"></div><div style="height:160px;margin:0 8px 8px;background:var(--bg-card);border:1px solid var(--border-1);border-radius:10px"></div><div style="height:160px;margin:0 8px 8px;background:var(--bg-card);border:1px solid var(--border-1);border-radius:10px"></div><div style="height:160px;margin:0 8px 8px;background:var(--bg-card);border:1px solid var(--border-1);border-radius:10px"></div><div style="height:160px;margin:0 8px 8px;background:var(--bg-card);border:1px solid var(--border-1);border-radius:10px"></div><div style="height:160px;margin:0 8px 8px;background:var(--bg-card);border:1px solid var(--border-1);border-radius:10px"></div></div></div>
-<div style="flex:1;margin:8px 8px 8px 0" class="flex column"><div style="height:150px;background:var(--bg-card);border:1px solid var(--border-1);border-radius:10px"></div><div style="height:300px;margin-top:8px;background:var(--bg-card);border:1px solid var(--border-1);border-radius:10px"></div></div>
+<div class="home-hero" id="homeHero">
+<div class="home-hero-title">欢迎来到<span>小陈的个人网站</span></div>
+<div class="home-hero-desc">一个集论坛交流、好友社交、即时聊天于一体的个人空间。在这里分享你的想法，结识志同道合的朋友。</div>
+<div class="home-welcome" id="homeWelcome"></div>
+<div class="home-hero-actions" id="homeActions">
+<button class="btn-primary" id="homeLoginBtn" onclick="showModal()">登录 / 注册</button>
+<button class="btn-secondary" onclick="showPage('forum')">浏览论坛</button>
+</div>
+</div>
+
+<div class="home-section-title">功能入口</div>
+<div class="home-features">
+<div class="home-feature-card" onclick="showPage('forum')">
+<div class="home-feature-icon">&#128172;</div>
+<div class="home-feature-name">论坛</div>
+<div class="home-feature-desc">浏览版块、发表帖子、参与讨论</div>
+</div>
+<div class="home-feature-card" id="featFriends" onclick="requireAuth(function(){showPage('friends')})">
+<div class="home-feature-icon">&#129309;</div>
+<div class="home-feature-name">好友</div>
+<div class="home-feature-desc">管理好友列表，查看好友资料</div>
+</div>
+<div class="home-feature-card" id="featChat" onclick="requireAuth(function(){showPage('chat')})">
+<div class="home-feature-icon">&#128172;</div>
+<div class="home-feature-name">消息</div>
+<div class="home-feature-desc">与好友实时聊天，支持多会话</div>
+</div>
+<div class="home-feature-card" id="featProfile" onclick="requireAuth(function(){showPage('profile');loadProfile()})">
+<div class="home-feature-icon">&#128100;</div>
+<div class="home-feature-name">个人资料</div>
+<div class="home-feature-desc">设置昵称、头像、个人简介</div>
+</div>
+</div>
+
+<div id="homeStatsSection" style="display:none">
+<div class="home-section-title">我的数据</div>
+<div class="home-stats" id="homeStats">
+<div class="home-stat-card"><div class="home-stat-num" id="statFriends">-</div><div class="home-stat-label">好友</div></div>
+<div class="home-stat-card"><div class="home-stat-num" id="statUnread">-</div><div class="home-stat-label">未读消息</div></div>
+<div class="home-stat-card"><div class="home-stat-num" id="statNotifs">-</div><div class="home-stat-label">未读通知</div></div>
+</div>
+</div>
+
+<div class="home-footer">
+&copy; 2024-2026 小陈的个人网站 &middot; Powered by <a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a>
+</div>
 </div>
 <div class="page-container" id="profilePage"><div class="profile-header"><div class="profile-avatar" id="profileAvatar" title="点击更换头像"><span id="avatarLetter">U</span><img id="avatarImg" style="display:none" src="" alt=""><div class="avatar-overlay">更换头像</div></div><div class="profile-header-info"><h2 id="profileDisplayName">用户</h2><p id="profileEmail">加载中...</p><div id="avatarStatus" class="avatar-upload-status"></div></div></div><div id="profileLoading" class="profile-loading">加载中...</div><div id="profileForm" style="display:none"><div class="profile-msg" id="profileMsg"></div><div class="profile-field"><label>昵称</label><input type="text" id="fieldNickname" placeholder="设置你的昵称"></div><div class="profile-field"><label>性别</label><select id="fieldGender"><option value="">请选择性别</option><option value="男">男</option><option value="女">女</option><option value="保密">保密</option></select></div><div class="profile-field"><label>年龄</label><input type="number" id="fieldAge" placeholder="填写你的年龄" min="1" max="150"></div><div class="profile-field"><label>个人简介</label><textarea id="fieldBio" placeholder="介绍一下自己吧"></textarea></div><div class="profile-field"><label>手机号</label><input type="tel" id="fieldPhone" placeholder="填写手机号码"></div><div class="profile-actions"><button class="btn-primary" id="saveProfileBtn">保存资料</button><button class="btn-secondary" id="backHomeBtn">返回首页</button></div></div></div>
 <div class="page-container" id="friendsPage"><div class="page-header"><h2>好友列表</h2><button class="btn-secondary" id="friendsBackHomeBtn">返回首页</button></div><div id="friendsList"><div class="friends-empty">加载中...</div></div></div>
@@ -653,6 +828,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opac
 </div>
 <div class="page-container" id="notifPage"><div class="page-header"><h2>通知</h2><div class="page-header-actions"><button class="btn-primary" id="markAllReadBtn" style="width:auto;margin-top:0;padding:8px 18px;font-size:13px">全部已读</button><button class="btn-secondary" id="notifBackBtn">返回首页</button></div></div><div id="notifList"><div class="friends-empty">加载中...</div></div></div>
 </div>
+<button class="back-to-top" id="backToTop" title="回到顶部">&#8679;</button>
 <script>
 var SUPABASE_URL='https://rzihygvoeoryaxcrxxlf.supabase.co';
 var SUPABASE_KEY='sb_publishable_UX7-27ioJRcRINfbWZ31jg_mCe-nCsm';
@@ -695,7 +871,7 @@ async function doReset(email){var m=document.getElementById('msg'),a=document.ge
 async function doLogout(){unsubscribeRealtime();unsubscribeComments();unsubscribeNotifRt();if(supabase)await supabase.auth.signOut();currentUser=null;currentAvatarUrl='';currentNickname='';friendsCache={};updateUI(null);showPage('home')}
 function updateAvatarDisplay(url){currentAvatarUrl=url||'';var l=document.getElementById('avatarLetter'),i=document.getElementById('avatarImg'),s=document.getElementById('sidebarAvatar');if(url){l.style.display='none';i.src=url;i.style.display='';s.src=url}else{l.style.display='';i.style.display='none';i.src='';s.src='https://s21.ax1x.com/2024/09/17/pAKE9fK.png'}}
 async function uploadAvatar(file){if(!supabase||!currentUser||!file)return;var st=document.getElementById('avatarStatus');if(!file.type.startsWith('image/')){st.textContent='请选择图片';st.className='avatar-upload-status error';return}if(file.size>2*1024*1024){st.textContent='不能超过2MB';st.className='avatar-upload-status error';return}st.textContent='上传中...';st.className='avatar-upload-status';try{var ext=file.name.split('.').pop(),fp=currentUser.id+'/avatar.'+ext;var ur=await supabase.storage.from('avatars').upload(fp,file,{upsert:true});if(ur.error){st.textContent='上传失败';st.className='avatar-upload-status error';return}var pub=supabase.storage.from('avatars').getPublicUrl(fp).data.publicUrl+'?t='+Date.now();await supabase.from('profiles').update({avatar_url:pub,updated_at:new Date().toISOString()}).eq('id',currentUser.id);updateAvatarDisplay(pub);st.textContent='上传成功！';st.className='avatar-upload-status success'}catch(e){st.textContent='错误';st.className='avatar-upload-status error'}}
-function updateUI(user){currentUser=user;if(user){document.getElementById('authLink').style.display='none';document.getElementById('logoutLink').style.display='block';document.getElementById('profileLink').style.display='block';document.getElementById('friendsLink').style.display='block';document.getElementById('socialLink').style.display='block';document.getElementById('chatLink').style.display='block';document.getElementById('notifLink').style.display='block';var n=user.email?user.email.split('@')[0]:'用户';document.getElementById('userName').textContent=n;currentNickname=n;loadAvatarForPreview(user.id);subscribeRealtime();subscribeNotifRt();loadUnreadCount();updateRequestBadge();updateNotifBadge()}else{document.getElementById('authLink').style.display='block';document.getElementById('logoutLink').style.display='none';document.getElementById('profileLink').style.display='none';document.getElementById('friendsLink').style.display='none';document.getElementById('socialLink').style.display='none';document.getElementById('chatLink').style.display='none';document.getElementById('notifLink').style.display='none';document.getElementById('userName').textContent='未登录';currentNickname='';updateAvatarDisplay('');document.getElementById('chatBadge').style.display='none';document.getElementById('notifBadge').style.display='none'}}
+function updateUI(user){currentUser=user;if(user){document.getElementById('authLink').style.display='none';document.getElementById('logoutLink').style.display='block';document.getElementById('profileLink').style.display='block';document.getElementById('friendsLink').style.display='block';document.getElementById('socialLink').style.display='block';document.getElementById('chatLink').style.display='block';document.getElementById('notifLink').style.display='block';var n=user.email?user.email.split('@')[0]:'用户';document.getElementById('userName').textContent=n;currentNickname=n;loadAvatarForPreview(user.id);subscribeRealtime();subscribeNotifRt();loadUnreadCount();updateRequestBadge();updateNotifBadge()}else{document.getElementById('authLink').style.display='block';document.getElementById('logoutLink').style.display='none';document.getElementById('profileLink').style.display='none';document.getElementById('friendsLink').style.display='none';document.getElementById('socialLink').style.display='none';document.getElementById('chatLink').style.display='none';document.getElementById('notifLink').style.display='none';document.getElementById('userName').textContent='未登录';currentNickname='';updateAvatarDisplay('');document.getElementById('chatBadge').style.display='none';document.getElementById('notifBadge').style.display='none'}loadHomePage()}
 async function loadAvatarForPreview(uid){if(!supabase)return;try{var r=await supabase.from('profiles').select('avatar_url,nickname').eq('id',uid).maybeSingle();if(r.data){if(r.data.avatar_url)updateAvatarDisplay(r.data.avatar_url);if(r.data.nickname){currentNickname=r.data.nickname;document.getElementById('userName').textContent=r.data.nickname}}}catch(e){}}
 async function loadProfile(){if(!supabase||!currentUser)return;document.getElementById('profileLoading').style.display='';document.getElementById('profileForm').style.display='none';var n=currentUser.email?currentUser.email.split('@')[0]:'U';document.getElementById('avatarLetter').textContent=n.charAt(0).toUpperCase();document.getElementById('profileDisplayName').textContent=n;document.getElementById('profileEmail').textContent=currentUser.email||'';try{var r=await supabase.from('profiles').select('*').eq('id',currentUser.id).maybeSingle();if(r.error){document.getElementById('profileLoading').textContent='加载失败';return}if(r.data){document.getElementById('fieldNickname').value=r.data.nickname||'';document.getElementById('fieldGender').value=r.data.gender||'';document.getElementById('fieldAge').value=r.data.age||'';document.getElementById('fieldBio').value=r.data.bio||'';document.getElementById('fieldPhone').value=r.data.phone||'';updateAvatarDisplay(r.data.avatar_url||'');if(r.data.nickname){document.getElementById('profileDisplayName').textContent=r.data.nickname;currentNickname=r.data.nickname}}else{await supabase.from('profiles').insert({id:currentUser.id,nickname:n,email:currentUser.email});document.getElementById('fieldNickname').value=n}document.getElementById('profileLoading').style.display='none';document.getElementById('profileForm').style.display=''}catch(e){document.getElementById('profileLoading').textContent='网络错误'}}
 async function saveProfile(){if(!supabase||!currentUser)return;var b=document.getElementById('saveProfileBtn'),m=document.getElementById('profileMsg');b.disabled=true;b.textContent='保存中...';try{var r=await supabase.from('profiles').update({nickname:document.getElementById('fieldNickname').value.trim(),gender:document.getElementById('fieldGender').value,age:document.getElementById('fieldAge').value.trim(),bio:document.getElementById('fieldBio').value.trim(),phone:document.getElementById('fieldPhone').value.trim(),updated_at:new Date().toISOString()}).eq('id',currentUser.id);if(r.error){m.textContent='保存失败';m.className='profile-msg error'}else{m.textContent='保存成功！';m.className='profile-msg success';var dn=document.getElementById('fieldNickname').value.trim()||(currentUser.email?currentUser.email.split('@')[0]:'用户');currentNickname=dn}}catch(e){m.textContent='网络错误';m.className='profile-msg error'}b.disabled=false;b.textContent='保存资料'}
@@ -974,6 +1150,67 @@ document.getElementById('avatarPreviewOverlay').addEventListener('click',hideAva
 document.getElementById('avatarFileInput').addEventListener('change',function(e){if(e.target.files[0])uploadAvatar(e.target.files[0])});
 document.getElementById('postImageInput').addEventListener('change',async function(e){if(e.target.files[0]){var url=await uploadPostImage(e.target.files[0]);if(url)mdInsert('![图片]('+url+')');e.target.value=''}});
 document.getElementById('profileAvatar').addEventListener('click',function(){if(currentUser)document.getElementById('avatarFileInput').click()});
+
+/* ===== 主题切换 ===== */
+function initTheme(){
+var saved=safeStorage.getItem('theme')||'dark';
+document.documentElement.setAttribute('data-theme',saved);
+updateThemeBtn(saved);
+}
+function toggleTheme(){
+var cur=document.documentElement.getAttribute('data-theme')||'dark';
+var next=cur==='dark'?'light':'dark';
+document.documentElement.setAttribute('data-theme',next);
+safeStorage.setItem('theme',next);
+updateThemeBtn(next);
+}
+function updateThemeBtn(t){
+var icon=document.getElementById('themeIcon'),label=document.getElementById('themeLabel');
+if(t==='light'){icon.innerHTML='&#9728;';label.textContent='暗色'}
+else{icon.innerHTML='&#9790;';label.textContent='亮色'}
+}
+document.getElementById('themeToggle').addEventListener('click',toggleTheme);
+initTheme();
+
+/* ===== 回到顶部 ===== */
+var bttBtn=document.getElementById('backToTop');
+window.addEventListener('scroll',function(){
+if(window.scrollY>300)bttBtn.classList.add('visible');
+else bttBtn.classList.remove('visible');
+},{passive:true});
+bttBtn.addEventListener('click',function(){window.scrollTo({top:0,behavior:'smooth'})});
+
+/* ===== 首页动态内容 ===== */
+function requireAuth(fn){if(currentUser)fn();else showModal()}
+function loadHomePage(){
+var welcome=document.getElementById('homeWelcome');
+var statsSection=document.getElementById('homeStatsSection');
+var loginBtn=document.getElementById('homeLoginBtn');
+if(currentUser){
+var name=currentNickname||(currentUser.email?currentUser.email.split('@')[0]:'用户');
+welcome.innerHTML='欢迎回来，<strong>'+escHtml(name)+'</strong>！';
+loginBtn.textContent='进入论坛';loginBtn.onclick=function(){showPage('forum')};
+statsSection.style.display='';
+loadHomeStats();
+}else{
+welcome.innerHTML='登录后可以发帖、添加好友、实时聊天';
+loginBtn.textContent='登录 / 注册';loginBtn.onclick=function(){showModal()};
+statsSection.style.display='none';
+}
+}
+async function loadHomeStats(){
+if(!supabase||!currentUser)return;
+try{
+var fr=await supabase.from('friendships').select('id',{count:'exact',head:true}).eq('status','accepted').or('requester_id.eq.'+currentUser.id+',addressee_id.eq.'+currentUser.id);
+document.getElementById('statFriends').textContent=fr.count||0;
+var mr=await supabase.from('messages').select('id',{count:'exact',head:true}).eq('receiver_id',currentUser.id).eq('is_read',false);
+document.getElementById('statUnread').textContent=mr.count||0;
+var nr=await supabase.from('notifications').select('id',{count:'exact',head:true}).eq('user_id',currentUser.id).eq('is_read',false);
+document.getElementById('statNotifs').textContent=nr.count||0;
+}catch(e){}
+}
+loadHomePage();
+
 waitForSDK(20);
 </script>
 </body>
