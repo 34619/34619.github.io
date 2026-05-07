@@ -986,6 +986,7 @@ padding:20px;margin-bottom:20px;color:var(--text-2);font-size:13px;line-height:1
 <div class="page-container" id="bookmarksPage"><div class="page-header"><h2>我的收藏</h2><button class="btn-secondary" id="bookmarksBackBtn">返回首页</button></div><div id="bookmarksList"><div class="friends-empty">加载中...</div></div></div>
 <div class="page-container" id="userProfilePage"><div class="page-header"><h2>用户主页</h2><button class="btn-secondary" id="uprofBackBtn">返回</button></div><div id="uprofContent"></div></div>
 <div class="page-container" id="adminPage"><div class="page-header"><h2>管理看板</h2><button class="btn-secondary" id="adminBackBtn">返回首页</button></div><div id="adminContent"></div></div>
+
 <div class="modal" id="editHistoryModal"><div class="modal-content" style="max-width:520px;max-height:80vh;overflow-y:auto"><h3>编辑历史</h3><div id="editHistoryList"></div><button class="btn-secondary" onclick="document.getElementById('editHistoryModal').classList.remove('active')" style="margin-top:16px">关闭</button></div></div>
 <div class="modal" id="reportModal"><div class="modal-content"><h3>举报</h3><div id="reportMsg" class="msg"></div><div class="input-group"><label>举报原因</label><select id="reportReasonSelect" style="width:100%;padding:11px 14px;border:1px solid var(--border-3);border-radius:8px;background:var(--bg-input);color:var(--text-1);font-size:14px;outline:none"><option value="spam">垃圾广告</option><option value="abuse">辱骂/人身攻击</option><option value="illegal">违法违规内容</option><option value="other">其他</option></select></div><textarea class="report-reason-input" id="reportDetailInput" placeholder="补充说明（可选）"></textarea><button class="btn-primary" id="submitReportBtn" style="margin-top:16px">提交举报</button><button class="btn-secondary" onclick="document.getElementById('reportModal').classList.remove('active')" style="margin-top:10px">取消</button></div></div>
 </div>
@@ -1755,6 +1756,7 @@ var nr=await supabase.from('notifications').select('id',{count:'exact',head:true
 document.getElementById('statNotifs').textContent=nr.count||0;
 }catch(e){}
 }
+
 loadHomePage();
 
 waitForSDK(20);
