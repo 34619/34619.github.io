@@ -1558,13 +1558,13 @@ return'<div class="admin-post-item"><div class="admin-post-info"><div class="adm
 }catch(e){list.innerHTML='<div class="comments-empty">加载失败</div>'}
 }
 async function adminTogglePin(postId,pin){if(!supabase||!isAdmin)return;try{await supabase.from('posts').update({is_pinned:pin}).eq('id',postId);loadAdminPosts()}catch(e){}}
-async function adminDeletePost(postId){if(!supabase||!isAdmin||!confirm('确定删除此帖子？此操作不可撤销。'))return;try{await supabase.from('posts').delete().eq('id',postId);loadAdminPosts()}catch(e){}}
+async function adminDeletePost(postId){if(!supabase||!isAdmin||!confirm('确定删除此帖子？此操作不可撤销。'))return;try{await supabase.rpc('fn_admin_delete_content',{p_type:'post',p_id:postId});loadAdminPosts()}catch(e){}}
 async function loadAdminReports(){
 var el=document.getElementById('adminTabContent');if(!el)return;
 el.innerHTML='<div id="adminReportsList"><div class="comments-loading">加载中...</div></div>';
 var list=document.getElementById('adminReportsList');
 try{
-var r=await supabase.from('reports').select('*').order('created_at',{ascending:false}).limit(50);
+var r=await supabase.rpc('fn_admin_get_reports');
 if(r.error||!r.data||r.data.length===0){list.innerHTML='<div class="comments-empty">暂无举报</div>';return}
 var rids=[];r.data.forEach(function(rp){if(rids.indexOf(rp.reporter_id)===-1)rids.push(rp.reporter_id)});
 var pr=await supabase.from('profiles').select('id,nickname').in('id',rids);
@@ -1580,13 +1580,12 @@ return'<div class="report-item"><div class="report-item-info"><div class="report
 }
 async function resolveReport(reportId,status){
 if(!supabase)return;
-try{await supabase.rpc('fn_report',{rpt_id:reportId,new_status:status});loadAdminReports()}catch(e){}
+try{var res=await supabase.rpc('fn_report',{rpt_id:reportId,new_status:status});if(res.error)alert('操作失败：'+res.error.message);loadAdminReports()}catch(e){alert('操作失败')}
 }
 async function adminDeleteReportedContent(type,targetId,reportId){
 if(!supabase||!isAdmin||!confirm('确定删除此'+(type==='post'?'帖子':'评论')+'？此操作不可撤销。'))return;
 try{
-if(type==='post')await supabase.from('posts').delete().eq('id',targetId);
-else await supabase.from('comments').delete().eq('id',targetId);
+await supabase.rpc('fn_admin_delete_content',{p_type:type,p_id:targetId});
 await supabase.rpc('fn_report',{rpt_id:reportId,new_status:'resolved'});
 loadAdminReports();
 }catch(e){alert('操作失败')}
