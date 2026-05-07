@@ -1,6 +1,6 @@
 # 小陈的个人网站
 
-一个基于单文件 HTML + Supabase 构建的多功能社区平台，集成了论坛、即时聊天、好友系统、订单管理等功能。
+一个基于单文件 HTML + Supabase 构建的多功能社区平台，集成了论坛、即时聊天、好友系统等功能。
 
 在线访问：[https://34619.github.io](https://34619.github.io)
 
@@ -85,7 +85,6 @@ var SUPABASE_KEY = '你的anon Key';
 | `reports` | 举报 |
 | `checkins` | 签到记录 |
 | `admins` | 管理员 |
-| `orders` | 跟单数据 |
 
 ## RPC 函数
 
