@@ -753,6 +753,27 @@ font-size:14px;font-weight:500;cursor:pointer;transition:all 0.25s;font-family:i
 .admin-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:24px}
 .admin-stat-card{background:var(--bg-card);border:1px solid var(--border-1);border-radius:12px;padding:20px 16px;text-align:center}
 .admin-stat-num{font-size:28px;font-weight:800;color:var(--accent);margin-bottom:4px}
+.admin-tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border-1);overflow-x:auto}
+.admin-tab{padding:10px 18px;border:none;background:transparent;color:var(--text-3);font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s;font-family:inherit;white-space:nowrap;margin-bottom:-1px}
+.admin-tab:hover{color:var(--text-1)}
+.admin-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.admin-user-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg-card);border:1px solid var(--border-1);border-radius:10px;margin-bottom:8px}
+.admin-user-info{flex:1;min-width:0}
+.admin-user-name{font-size:14px;font-weight:600;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.admin-user-email{font-size:12px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.admin-user-meta{font-size:11px;color:var(--text-4);margin-top:2px}
+.admin-post-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg-card);border:1px solid var(--border-1);border-radius:10px;margin-bottom:8px}
+.admin-post-info{flex:1;min-width:0}
+.admin-post-title{font-size:14px;font-weight:600;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.admin-post-meta{font-size:12px;color:var(--text-3);margin-top:2px}
+.admin-actions{display:flex;gap:6px;flex-shrink:0}
+.admin-actions button{padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;border:none;font-weight:500;transition:all 0.2s;font-family:inherit}
+.admin-search{display:flex;gap:8px;margin-bottom:16px}
+.admin-search input{flex:1;padding:10px 14px;border:1px solid var(--border-2);border-radius:8px;background:var(--bg-input);color:var(--text-1);font-size:13px;outline:none;transition:all 0.25s}
+.admin-search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.admin-search input::placeholder{color:var(--text-placeholder2)}
+.music-progress-bar{cursor:pointer}
+.music-progress-bar.dragging .music-progress-fill{transition:none}
 .admin-stat-label{font-size:12px;color:var(--text-3);font-weight:500}
 .report-item{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--bg-card);border:1px solid var(--border-1);border-radius:10px;margin-bottom:8px}
 .report-item-info{flex:1;min-width:0}
@@ -1086,11 +1107,15 @@ function checkHash(){var h=window.location.hash;if(h&&h.match(/^#post-(.+)$/)){o
 
 /* ===== 音乐播放器逻辑 ===== */
 var musicPlaylist=[
-  {title:'轻音乐示例 1',artist:'示例艺术家',src:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',cover:''},
-  {title:'轻音乐示例 2',artist:'示例艺术家',src:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',cover:''},
-  {title:'轻音乐示例 3',artist:'示例艺术家',src:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',cover:''}
+  {title:'Song 1 - Ambient',artist:'SoundHelix',src:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',cover:''},
+  {title:'Song 2 - Energetic',artist:'SoundHelix',src:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',cover:''},
+  {title:'Song 3 - Melodic',artist:'SoundHelix',src:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',cover:''},
+  {title:'Song 4 - Rhythmic',artist:'SoundHelix',src:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',cover:''},
+  {title:'Song 5 - Calm',artist:'SoundHelix',src:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3',cover:''},
+  {title:'Song 6 - Upbeat',artist:'SoundHelix',src:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3',cover:''}
 ];
 var musicIdx=0,musicPlaying=false,musicAudio=new Audio(),musicAutoHideTimer=null,musicPlayerEl,musicVolume=0.7;
+var musicShuffleHistory=[];
 var musicMode='loop'; // loop | single | shuffle
 musicAudio.volume=musicVolume;
 
@@ -1119,27 +1144,45 @@ function musicInit(){
     document.getElementById('musicPlaylist').classList.remove('open');
   });
 
-  document.getElementById('musicProgressBar').addEventListener('click',function(e){
+  // 进度条拖拽
+  var progBar=document.getElementById('musicProgressBar');
+  var isDragging=false;
+  function musicSeek(e){
     if(!musicAudio.duration)return;
-    var rect=this.getBoundingClientRect();
-    var pct=(e.clientX-rect.left)/rect.width;
-    musicAudio.currentTime=pct*musicAudio.duration;
-  });
-
-  document.getElementById('musicVolSlider').addEventListener('click',function(e){
-    var rect=this.getBoundingClientRect();
+    var rect=progBar.getBoundingClientRect();
     var pct=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
-    musicVolume=pct;musicAudio.volume=musicVolume;musicUpdateVolUI();
-  });
+    musicAudio.currentTime=pct*musicAudio.duration;
+    document.getElementById('musicProgressFill').style.width=(pct*100)+'%';
+  }
+  progBar.addEventListener('mousedown',function(e){isDragging=true;progBar.classList.add('dragging');musicSeek(e)});
+  document.addEventListener('mousemove',function(e){if(isDragging)musicSeek(e)});
+  document.addEventListener('mouseup',function(){if(isDragging){isDragging=false;progBar.classList.remove('dragging')}});
+
+  // 音量条拖拽
+  var volSlider=document.getElementById('musicVolSlider');
+  var volDragging=false;
+  function setVol(e){var rect=volSlider.getBoundingClientRect();var pct=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));musicVolume=pct;musicAudio.volume=musicVolume;musicUpdateVolUI()}
+  volSlider.addEventListener('mousedown',function(e){volDragging=true;setVol(e)});
+  document.addEventListener('mousemove',function(e){if(volDragging)setVol(e)});
+  document.addEventListener('mouseup',function(){volDragging=false});
   document.getElementById('musicVolIcon').addEventListener('click',function(){
     if(musicAudio.volume>0){musicAudio.volume=0}else{musicAudio.volume=musicVolume||0.7}
     musicUpdateVolUI();
+  });
+
+  // 键盘快捷键
+  document.addEventListener('keydown',function(e){
+    if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT')return;
+    if(e.code==='Space'){e.preventDefault();musicTogglePlay()}
+    if(e.code==='ArrowLeft'){e.preventDefault();musicPrev()}
+    if(e.code==='ArrowRight'){e.preventDefault();musicNext()}
   });
 
   musicAudio.addEventListener('timeupdate',musicUpdateProgress);
   musicAudio.addEventListener('ended',musicOnEnded);
   musicAudio.addEventListener('loadedmetadata',function(){
     document.getElementById('musicTimeDur').textContent=musicFmtTime(musicAudio.duration);
+    musicRenderPlaylist();
   });
 }
 
@@ -1197,8 +1240,15 @@ function musicPrev(){
 }
 function musicNext(){
   var idx;
-  if(musicMode==='shuffle'){idx=Math.floor(Math.random()*musicPlaylist.length)}
-  else{idx=(musicIdx+1)%musicPlaylist.length}
+  if(musicMode==='shuffle'){
+    var candidates=[];
+    for(var i=0;i<musicPlaylist.length;i++){if(i!==musicIdx&&musicShuffleHistory.indexOf(i)===-1)candidates.push(i)}
+    if(candidates.length===0){musicShuffleHistory=[];candidates=[];for(var i=0;i<musicPlaylist.length;i++){if(i!==musicIdx)candidates.push(i)}}
+    if(candidates.length===0){idx=0}
+    else{idx=candidates[Math.floor(Math.random()*candidates.length)]}
+    musicShuffleHistory.push(idx);
+    if(musicShuffleHistory.length>=musicPlaylist.length)musicShuffleHistory=[idx];
+  }else{idx=(musicIdx+1)%musicPlaylist.length}
   musicLoadTrack(idx,true);
 }
 function musicOnEnded(){
@@ -1239,7 +1289,8 @@ function musicUpdateVolUI(){
 function musicRenderPlaylist(){
   var el=document.getElementById('musicPlaylistScroll');
   el.innerHTML=musicPlaylist.map(function(t,i){
-    return'<div class="playlist-item'+(i===musicIdx?' active':'')+'" onclick="musicPlayFromList('+i+')"><span class="pl-idx">'+(i+1)+'</span><span class="pl-name">'+escHtml(t.title)+'</span></div>';
+    var d=(i===musicIdx&&musicAudio.duration)?musicFmtTime(musicAudio.duration):(t.duration||'');
+    return'<div class="playlist-item'+(i===musicIdx?' active':'')+'" onclick="musicPlayFromList('+i+')"><span class="pl-idx">'+(i+1)+'</span><span class="pl-name">'+escHtml(t.title)+'<span style="color:var(--text-4);font-size:11px;margin-left:6px">'+escHtml(t.artist||'')+'</span></span><span class="pl-dur">'+d+'</span></div>';
   }).join('');
 }
 function musicHighlightPlaylist(){
@@ -1462,38 +1513,80 @@ el.innerHTML=r.data.map(function(c){return'<div class="history-item" style="curs
 }
 
 /* ===== 管理看板 ===== */
+var adminCurrentTab='stats';
 async function loadAdminPage(){
 if(!isAdmin)return;
 var el=document.getElementById('adminContent');
-el.innerHTML='<div class="comments-loading">加载中...</div>';
-try{
-var sr=await supabase.rpc('fn_site_stats');
-var st=sr.data||{};
-el.innerHTML='<div class="admin-stats"><div class="admin-stat-card"><div class="admin-stat-num">'+(st.users||0)+'</div><div class="admin-stat-label">总用户</div></div><div class="admin-stat-card"><div class="admin-stat-num">'+(st.posts||0)+'</div><div class="admin-stat-label">总帖数</div></div><div class="admin-stat-card"><div class="admin-stat-num">'+(st.comments||0)+'</div><div class="admin-stat-label">总评论</div></div><div class="admin-stat-card"><div class="admin-stat-num">'+(st.today_checkins||0)+'</div><div class="admin-stat-label">今日签到</div></div></div><div class="home-section-title">举报列表</div><div id="adminReportsList"></div>';
-loadAdminReports();
+el.innerHTML='<div class="admin-tabs"><button class="admin-tab'+(adminCurrentTab==='stats'?' active':'')+'" onclick="switchAdminTab(\'stats\')">统计概览</button><button class="admin-tab'+(adminCurrentTab==='users'?' active':'')+'" onclick="switchAdminTab(\'users\')">用户管理</button><button class="admin-tab'+(adminCurrentTab==='posts'?' active':'')+'" onclick="switchAdminTab(\'posts\')">帖子管理</button><button class="admin-tab'+(adminCurrentTab==='reports'?' active':'')+'" onclick="switchAdminTab(\'reports\')">举报处理</button></div><div id="adminTabContent"></div>';
+switchAdminTab(adminCurrentTab);
+}
+function switchAdminTab(tab){adminCurrentTab=tab;var el=document.getElementById('adminTabContent');if(!el)return;el.innerHTML='<div class="comments-loading">加载中...</div>';document.querySelectorAll('.admin-tab').forEach(function(t,i){t.classList.toggle('active',['stats','users','posts','reports'][i]===tab)});if(tab==='stats')loadAdminStats();else if(tab==='users')loadAdminUsers();else if(tab==='posts')loadAdminPosts();else if(tab==='reports')loadAdminReports();}
+async function loadAdminStats(){
+var el=document.getElementById('adminTabContent');if(!el)return;
+try{var sr=await supabase.rpc('fn_site_stats');var st=sr.data||{};
+el.innerHTML='<div class="admin-stats"><div class="admin-stat-card"><div class="admin-stat-num">'+(st.users||0)+'</div><div class="admin-stat-label">总用户</div></div><div class="admin-stat-card"><div class="admin-stat-num">'+(st.posts||0)+'</div><div class="admin-stat-label">总帖数</div></div><div class="admin-stat-card"><div class="admin-stat-num">'+(st.comments||0)+'</div><div class="admin-stat-label">总评论</div></div><div class="admin-stat-card"><div class="admin-stat-num">'+(st.today_checkins||0)+'</div><div class="admin-stat-label">今日签到</div></div></div>';
 }catch(e){el.innerHTML='<div class="comments-empty">加载失败</div>'}
 }
+var adminUsersSearch='';
+async function loadAdminUsers(){
+var el=document.getElementById('adminTabContent');if(!el)return;
+el.innerHTML='<div class="admin-search"><input type="text" id="adminUserSearchInput" placeholder="搜索昵称或邮箱..." value="'+escHtml(adminUsersSearch)+'" onkeydown="if(event.key===\'Enter\'){adminUsersSearch=this.value;loadAdminUsers()}"></div><div id="adminUsersList"><div class="comments-loading">加载中...</div></div>';
+var list=document.getElementById('adminUsersList');
+try{var q=supabase.from('profiles').select('*').order('points',{ascending:false}).limit(50);
+if(adminUsersSearch)q=q.or('nickname.ilike.%'+adminUsersSearch+'%,email.ilike.%'+adminUsersSearch+'%');
+var r=await q;if(r.error||!r.data||r.data.length===0){list.innerHTML='<div class="comments-empty">暂无用户</div>';return}
+list.innerHTML=r.data.map(function(u){var avatar=u.avatar_url?'<img class="friend-card-avatar" style="width:36px;height:36px" src="'+u.avatar_url+'">':'<div class="friend-card-avatar-letter" style="width:36px;height:36px;font-size:14px">'+(u.nickname||'?').charAt(0).toUpperCase()+'</div>';
+return'<div class="admin-user-item">'+avatar+'<div class="admin-user-info"><div class="admin-user-name">'+escHtml(u.nickname||'用户')+getUserBadge(u.points)+'</div><div class="admin-user-email">'+escHtml(u.email||'')+'</div><div class="admin-user-meta">'+(u.points||0)+' 积分 &middot; '+((u.gender||'')?(u.gender+' &middot; '):'')+((u.age||'')?(u.age+'岁'):'')+'</div></div><div class="admin-actions"><button class="btn-accept" onclick="showUserProfile(\''+u.id+'\')">查看</button></div></div>'}).join('');
+}catch(e){list.innerHTML='<div class="comments-empty">加载失败</div>'}
+}
+var adminPostsSearch='';
+async function loadAdminPosts(){
+var el=document.getElementById('adminTabContent');if(!el)return;
+el.innerHTML='<div class="admin-search"><input type="text" id="adminPostSearchInput" placeholder="搜索帖子标题..." value="'+escHtml(adminPostsSearch)+'" onkeydown="if(event.key===\'Enter\'){adminPostsSearch=this.value;loadAdminPosts()}"></div><div id="adminPostsList"><div class="comments-loading">加载中...</div></div>';
+var list=document.getElementById('adminPostsList');
+try{var q=supabase.from('posts').select('id,title,author_id,is_pinned,is_featured,created_at,views_count,likes_count').order('created_at',{ascending:false}).limit(50);
+if(adminPostsSearch)q=q.ilike('title','%'+adminPostsSearch+'%');
+var r=await q;if(r.error||!r.data||r.data.length===0){list.innerHTML='<div class="comments-empty">暂无帖子</div>';return}
+var aids=[];r.data.forEach(function(p){if(aids.indexOf(p.author_id)===-1)aids.push(p.author_id)});
+var pr=await supabase.from('profiles').select('id,nickname').in('id',aids);var pm={};(pr.data||[]).forEach(function(p){pm[p.id]=p});
+list.innerHTML=r.data.map(function(p){var a=pm[p.author_id]||{};
+var tags='';if(p.is_pinned)tags+='<span class="pinned-tag">置顶</span>';if(p.is_featured)tags+='<span class="pinned-tag" style="background:#ffa500">精华</span>';
+return'<div class="admin-post-item"><div class="admin-post-info"><div class="admin-post-title">'+tags+escHtml(p.title)+'</div><div class="admin-post-meta">'+escHtml(a.nickname||'未知')+' &middot; '+formatTime(p.created_at)+' &middot; '+(p.views_count||0)+'浏览 &middot; '+(p.likes_count||0)+'赞</div></div><div class="admin-actions"><button class="btn-edit" onclick="adminTogglePin(\''+p.id+'\','+!p.is_pinne+')">'+(p.is_pinned?'取消置顶':'置顶')+'</button><button class="btn-edit" style="background:rgba(255,165,0,0.12);color:#ffa500" onclick="toggleFeatured(\''+p.id+'\','+!p.is_featured+')">'+(p.is_featured?'取消精华':'精华')+'</button><button class="btn-del" onclick="adminDeletePost(\''+p.id+'\')">删除</button></div></div>'}).join('');
+}catch(e){list.innerHTML='<div class="comments-empty">加载失败</div>'}
+}
+async function adminTogglePin(postId,pin){if(!supabase||!isAdmin)return;try{await supabase.from('posts').update({is_pinned:pin}).eq('id',postId);loadAdminPosts()}catch(e){}}
+async function adminDeletePost(postId){if(!supabase||!isAdmin||!confirm('确定删除此帖子？此操作不可撤销。'))return;try{await supabase.from('posts').delete().eq('id',postId);loadAdminPosts()}catch(e){}}
 async function loadAdminReports(){
-var el=document.getElementById('adminReportsList');if(!el)return;
-el.innerHTML='<div class="comments-loading">加载中...</div>';
+var el=document.getElementById('adminTabContent');if(!el)return;
+el.innerHTML='<div id="adminReportsList"><div class="comments-loading">加载中...</div></div>';
+var list=document.getElementById('adminReportsList');
 try{
 var r=await supabase.from('reports').select('*').order('created_at',{ascending:false}).limit(50);
-if(r.error||!r.data||r.data.length===0){el.innerHTML='<div class="comments-empty">暂无举报</div>';return}
+if(r.error||!r.data||r.data.length===0){list.innerHTML='<div class="comments-empty">暂无举报</div>';return}
 var rids=[];r.data.forEach(function(rp){if(rids.indexOf(rp.reporter_id)===-1)rids.push(rp.reporter_id)});
 var pr=await supabase.from('profiles').select('id,nickname').in('id',rids);
 var pm={};(pr.data||[]).forEach(function(p){pm[p.id]=p});
-el.innerHTML=r.data.map(function(rp){
+list.innerHTML=r.data.map(function(rp){
 var reporter=pm[rp.reporter_id]||{};
 var statusCls='report-status-'+rp.status;
 var statusText={pending:'待处理',resolved:'已处理',dismissed:'已忽略'}[rp.status]||rp.status;
-var actions=rp.status==='pending'?'<div class="report-item-actions"><button class="btn-resolve" onclick="resolveReport(\''+rp.id+'\',\'resolved\')">处理</button><button class="btn-dismiss" onclick="resolveReport(\''+rp.id+'\',\'dismissed\')">忽略</button></div>':'<span class="report-status '+statusCls+'">'+statusText+'</span>';
-return'<div class="report-item"><div class="report-item-info"><div class="report-item-type">'+(rp.target_type==='post'?'帖子':'评论')+' 举报 <span class="report-status '+statusCls+'">'+statusText+'</span></div><div class="report-item-reason">'+escHtml(rp.reason||'')+'</div><div class="report-item-time">'+escHtml(reporter.nickname||'未知')+' &middot; '+formatTime(rp.created_at)+'</div></div>'+actions+'</div>';
+var actions=rp.status==='pending'?'<div class="report-item-actions"><button class="btn-resolve" onclick="resolveReport(\''+rp.id+'\',\'resolved\')">处理</button><button class="btn-resolve" style="background:var(--danger)" onclick="adminDeleteReportedContent(\''+rp.target_type+'\',\''+rp.target_id+'\',\''+rp.id+'\')">删除内容</button><button class="btn-dismiss" onclick="resolveReport(\''+rp.id+'\',\'dismissed\')">忽略</button></div>':'<span class="report-status '+statusCls+'">'+statusText+'</span>';
+return'<div class="report-item"><div class="report-item-info"><div class="report-item-type">'+(rp.target_type==='post'?'帖子':'评论')+' 举报 <span class="report-status '+statusCls+'">'+statusText+'</span></div><div class="report-item-reason">'+escHtml(rp.reason||'')+'</div><div class="report-item-time">举报人：'+escHtml(reporter.nickname||'未知')+' &middot; '+formatTime(rp.created_at)+' &middot; 目标ID：'+rp.target_id.substring(0,8)+'...</div></div>'+actions+'</div>';
 }).join('');
-}catch(e){el.innerHTML='<div class="comments-empty">加载失败</div>'}
+}catch(e){list.innerHTML='<div class="comments-empty">加载失败</div>'}
 }
 async function resolveReport(reportId,status){
 if(!supabase)return;
 try{await supabase.rpc('fn_report',{rpt_id:reportId,new_status:status});loadAdminReports()}catch(e){}
+}
+async function adminDeleteReportedContent(type,targetId,reportId){
+if(!supabase||!isAdmin||!confirm('确定删除此'+(type==='post'?'帖子':'评论')+'？此操作不可撤销。'))return;
+try{
+if(type==='post')await supabase.from('posts').delete().eq('id',targetId);
+else await supabase.from('comments').delete().eq('id',targetId);
+await supabase.rpc('fn_report',{rpt_id:reportId,new_status:'resolved'});
+loadAdminReports();
+}catch(e){alert('操作失败')}
 }
 
 /* ===== 帖子分享 ===== */
