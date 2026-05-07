@@ -707,8 +707,8 @@ margin-left:6px;vertical-align:middle;letter-spacing:0.5px;
 .checkin-btn{
 display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;
 border:1px solid var(--accent);background:transparent;color:var(--accent);
-font-size:13px;font-weight:600;cursor:pointer;transition:all 0.25s;width:100%;
-margin:8px 12px;justify-content:center;font-family:inherit;
+font-size:13px;font-weight:600;cursor:pointer;transition:all 0.25s;
+box-sizing:border-box;width:calc(100% - 24px);margin:8px 12px;justify-content:center;font-family:inherit;
 }
 .checkin-btn:hover{background:var(--accent);color:#fff}
 .checkin-btn.checked{border-color:var(--border-2);color:var(--text-3);cursor:default;background:transparent}
@@ -995,6 +995,7 @@ var SUPABASE_URL='https://rzihygvoeoryaxcrxxlf.supabase.co';
 var SUPABASE_KEY='sb_publishable_UX7-27ioJRcRINfbWZ31jg_mCe-nCsm';
 var supabase=null,currentUser=null,currentAvatarUrl='',currentNickname='';
 var isAdmin=false;
+var previousPage=null;
 var currentChatFriendId=null,viewingFriendProfile=null,realtimeChannel=null,friendsCache={};
 var currentSectionId=null,currentSectionName='',sectionsCache={};
 var safeStorage={getItem:function(k){try{return localStorage.getItem(k)}catch(e){return null}},setItem:function(k,v){try{localStorage.setItem(k,v)}catch(e){}},removeItem:function(k){try{localStorage.removeItem(k)}catch(e){}}};
@@ -1471,6 +1472,8 @@ btn.disabled=false;btn.textContent='提交举报';
 var uprofPostsOffset=0,uprofTab='posts';
 async function showUserProfile(userId){
 if(!userId)return;
+previousPage=null;
+['forumPostDetailPage','adminPage','forumSectionsPage','bookmarksPage','homePage'].forEach(function(id){if(document.getElementById(id).classList.contains('active'))previousPage=id});
 var el=document.getElementById('uprofContent');
 el.innerHTML='<div class="comments-loading">加载中...</div>';
 showPage('userProfile');
@@ -1680,7 +1683,12 @@ document.getElementById('postImageInput').addEventListener('change',async functi
 document.getElementById('profileAvatar').addEventListener('click',function(){if(currentUser)document.getElementById('avatarFileInput').click()});
 document.getElementById('bookmarksLink').addEventListener('click',function(){showPage('bookmarks')});
 document.getElementById('bookmarksBackBtn').addEventListener('click',function(){showPage('home')});
-document.getElementById('uprofBackBtn').addEventListener('click',function(){window.history.back()});
+document.getElementById('uprofBackBtn').addEventListener('click',function(){
+if(previousPage){
+var m={'forumPostDetailPage':'forumPost','adminPage':'admin','forumSectionsPage':'forum','bookmarksPage':'bookmarks','homePage':'home'};
+showPage(m[previousPage]||'forum');
+}else showPage('forum');
+});
 document.getElementById('adminLink').addEventListener('click',function(){showPage('admin')});
 document.getElementById('adminBackBtn').addEventListener('click',function(){showPage('home')});
 document.getElementById('submitReportBtn').addEventListener('click',submitReport);
