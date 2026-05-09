@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Darkness Survival - Level System</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0a; color: #ccc; font-family: 'Courier New', monospace; display: flex; justify-content: center; min-height: 100vh; }
+#game { width: 800px; background: #111; border: 1px solid #333; padding: 8px; margin: 10px auto; }
+#topbar { display: flex; gap: 12px; padding: 4px 8px; background: #1a1a1a; border-bottom: 1px solid #333; font-size: 13px; align-items: center; flex-wrap: wrap; }
+#topbar span { white-space: nowrap; }
+.clr-hp { color: #e74c3c; }
+.clr-food { color: #e67e22; }
+.clr-water { color: #3498db; }
+.clr-temp { color: #9b59b6; }
+.clr-gold { color: #f1c40f; }
+.clr-floor { color: #2ecc71; font-weight: bold; }
+#map { font-size: 14px; line-height: 1.3; padding: 6px; white-space: pre; font-family: 'Courier New', monospace; letter-spacing: 1px; background: #0d0d0d; border: 1px solid #222; overflow: hidden; min-height: 230px; }
+#diary { height: 100px; overflow-y: auto; padding: 6px; background: #0d0d0d; border: 1px solid #222; font-size: 12px; line-height: 1.5; color: #999; margin-top: 4px; }
+#buttons { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+button, .btn { background: #222; color: #ccc; border: 1px solid #444; padding: 6px 14px; cursor: pointer; font-family: inherit; font-size: 13px; }
+button:hover, .btn:hover { background: #333; border-color: #666; }
+#overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10; justify-content: center; align-items: center; }
+#overlay.show { display: flex; }
+#overlay-inner { background: #111; border: 1px solid #444; padding: 16px; max-width: 520px; width: 92%; max-height: 80vh; overflow-y: auto; }
+#overlay-inner h2 { color: #f1c40f; margin-bottom: 10px; font-size: 18px; }
+.shop-item, .quest-item, .bag-item, .craft-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid #222; font-size: 13px; }
+#overlay-inner button { background: #222; color: #ccc; border: 1px solid #444; padding: 4px 10px; cursor: pointer; font-family: inherit; font-size: 12px; margin: 2px; }
+#overlay-inner button:hover { background: #333; }
+.close-btn { display: block; margin: 10px auto 0; padding: 6px 20px; }
+.legend { font-size: 11px; color: #666; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div id="game">
+  <div id="topbar"></div>
+  <div id="map"></div>
+  <div class="legend">@=你 M=怪物 >=楼梯 o=资源 S=商店 *=物品 B=BOSS #=墙 .=地</div>
+  <div id="diary"></div>
+  <div id="buttons"></div>
+</div>
+
+<div id="overlay"><div id="overlay-inner"></div></div>
+
+<script>
+// ================================================================
+//  Darkness Survival — Level / Progression System
+//  Standalone module: floor data, difficulty, shop, quests, save
+// ================================================================
+'use strict';
+
+// =================================================================
+//  1. FLOOR DEFINITIONS
+// =================================================================
+
+/**
+ * Each floor specifies maze dimensions, monster ranges, and features.
+ * Floors beyond 6 are generated dynamically with scaling.
+ */
+var FLOOR_DATA = {
+  1: { w:15, h:15, monRange:[3,5],  boss:false, shop:false, elite:false,
+       enemies:['zombie','slime','bat'],
+       desc:'阴暗的地牢入口，微弱的火把照亮四周。' },
+  2: { w:18, h:18, monRange:[5,8],  boss:true,  shop:false, elite:false,
+       enemies:['zombie','slime','bat','skeleton'],
+       desc:'更深层的黑暗，骷髅在走廊中游荡。' },
+  3: { w:20, h:20, monRange:[6,10], boss:false, shop:true,  elite:false,
+       enemies:['skeleton','spider','bat'],
+       desc:'地下集市的灯火若隐若现。' },
+  4: { w:22, h:22, monRange:[8,12], boss:true,  shop:false, elite:true,
+       enemies:['skeleton','spider','wraith'],
+       desc:'精英怪物把守的要道，危险无处不在。' },
+  5: { w:25, h:25, monRange:[10,15],boss:false, shop:false, elite:true,
+       enemies:['wraith','golem','spider'],
+       desc:'珍稀矿石散落在走廊中。' },
+  6: { w:28, h:28, monRange:[12,15],boss:true,  shop:true,  elite:true,
+       enemies:['wraith','golem','demon'],
+       desc:'恶魔的领地，每一步都是生与死的抉择。' }
+};
+
+/**
+ * Returns floor data.  Floors 7+ are generated dynamically:
+ * - Dimensions grow +2 per floor (capped at 40)
+ * - Boss every 2 floors, shop every 3 floors, always elite
+ * - Monster pool expands with floor
+ */
+function getFloorData(floor) {
+  if (FLOOR_DATA[floor]) return FLOOR_DATA[floor];
+  return {
+    w:   Math.min(28 + (floor - 6) * 2, 40),
+    h:   Math.min(28 + (floor - 6) * 2, 40),
+    monRange: [ Math.min(12 + floor, 18), Math.min(15 + floor, 22) ],
+    boss:   floor % 2 === 0,
+    shop:   floor % 3 === 0,
+    elite:  true,
+    enemies:['wraith','golem','demon','reaper'],
+    desc:   '深渊的第' + floor + '层，未知的恐怖在等待。'
+  };
+}
+
+// =================================================================
+//  2. ENEMY DEFINITIONS
+// =================================================================
+
+var ENEMY_DEFS = {
+  zombie:   { name:'丧尸',   icon:'Z', hp:15, atk:3, def:1, xp:8,  floor:1 },
+  slime:    { name:'史莱姆', icon:'S', hp:20, atk:2, def:2, xp:10, floor:1 },
+  bat:      { name:'蝙蝠',   icon:'B', hp:10, atk:4, def:0, xp:6,  floor:1 },
+  skeleton: { name:'骷髅',   icon:'K', hp:25, atk:5, def:2, xp:15, floor:2 },
+  spider:   { name:'蜘蛛',   icon:'P', hp:18, atk:6, def:1, xp:12, floor:2 },
+  wraith:   { name:'幽灵',   icon:'W', hp:30, atk:8, def:3, xp:22, floor:4 },
+  golem:    { name:'石像鬼', icon:'G', hp:50, atk:6, def:6, xp:30, floor:5 },
+  demon:    { name:'恶魔',   icon:'D', hp:40, atk:10,def:4, xp:35, floor:6 },
+  reaper:   { name:'死神',   icon:'R', hp:45, atk:12,def:5, xp:45, floor:7 }
+};
+
+// =================================================================
+//  3. DIFFICULTY SCALING FORMULAS
+// =================================================================
+
+/**
+ * Multiplier applied to monster base stats on a given floor.
+ * Floor 1 = 1.0x, floor 2 = 1.3x, floor N = 1 + (N-1)*0.3
+ */
+function getStatMultiplier(floor) {
+  return 1 + (floor - 1) * 0.3;
+}
+
+/**
+ * Random monster count clamped to the floor's monRange, max 15 + floor/2.
+ */
+function getMonsterCount(floor) {
+  var fd = getFloorData(floor);
+  var base = fd.monRange[0] + Math.floor(Math.random() * (fd.monRange[1] - fd.monRange[0] + 1));
+  return Math.min(base, 15 + Math.floor(floor / 2));
+}
+
+/**
+ * Resource node count decreases by 1 per floor (minimum 1).
+ */
+function getResourceCount(floor) {
+  return Math.max(1, 5 - floor);
+}
+
+/**
+ * XP required to reach (level+1) from level.
+ * Curve: 20 * 1.5^(level-1)
+ */
+function getXPForLevel(level) {
+  return Math.floor(20 * Math.pow(1.5, level - 1));
+}
+
+/**
+ * Boss stat multiplier: 1 + (floor-1) * 0.5
+ * Bosses scale faster than regular monsters.
+ */
+function getBossMultiplier(floor) {
+  return 1 + (floor - 1) * 0.5;
+}
+
+/**
+ * Create a scaled monster instance from a template and floor number.
+ */
+function createScaledEnemy(templateKey, floor) {
+  var t = ENEMY_DEFS[templateKey];
+  if (!t) return null;
+  var m = getStatMultiplier(floor);
+  return {
+    name:  t.name,
+    icon:  t.icon,
+    hp:    Math.floor(t.hp  * m),
+    maxHp: Math.floor(t.hp  * m),
+    atk:   Math.floor(t.atk * m),
+    def:   Math.floor(t.def * m),
+    xp:    Math.floor(t.xp  * m),
+    alive: true,
+    isBoss: false
+  };
+}
+
+/**
+ * Create a boss for the given floor.
+ * Uses a generic boss with higher base stats, scaled by getBossMultiplier.
+ */
+function createBoss(floor) {
+  var m = getBossMultiplier(floor);
+  return {
+    name:  '暗影之王',
+    icon:  '♛',
+    hp:    Math.floor(80 * m),
+    maxHp: Math.floor(80 * m),
+    atk:   Math.floor(12 * m),
+    def:   Math.floor(5  * m),
+    xp:    Math.floor(50 * floor * 0.5),
+    alive: true,
+    isBoss: true
+  };
+}
+
+// =================================================================
+//  4. ITEM DEFINITIONS
+// =================================================================
+
+var ITEMS = {
+  health:       { name:'生命药水',   desc:'恢复20HP',     type:'consumable', quality:'common',
+                  effect: function(g){ g.hp = Math.min(g.hp + 20, g.maxHp); } },
+  bread:        { name:'面包',       desc:'恢复20饥饿',   type:'consumable', quality:'common',
+                  effect: function(g){ g.hunger = Math.min(g.hunger + 20, 100); } },
+  water:        { name:'清水',       desc:'恢复25口渴',   type:'consumable', quality:'common',
+                  effect: function(g){ g.thirst = Math.min(g.thirst + 25, 100); } },
+  torch:        { name:'火把',       desc:'扩大视野范围', type:'consumable', quality:'common',
+                  effect: function(g){ g.visionBonus = (g.visionBonus || 0) + 1; } },
+  herb:         { name:'草药',       desc:'恢复10HP',     type:'consumable', quality:'common',
+                  effect: function(g){ g.hp = Math.min(g.hp + 10, g.maxHp); } },
+  wood:         { name:'木材',       desc:'制作材料',     type:'material',   quality:'common' },
+  ore:          { name:'矿石',       desc:'制作材料',     type:'material',   quality:'common' },
+  bandage:      { name:'绷带',       desc:'制作材料',     type:'material',   quality:'common' },
+  dagger:       { name:'匕首',       desc:'ATK+1',        type:'weapon',     quality:'common',  atkBonus:1 },
+  clothes:      { name:'布衣',       desc:'DEF+1',        type:'armor',      quality:'common',  defBonus:1 },
+  rustySword:   { name:'生锈铁剑',   desc:'ATK+3',        type:'weapon',     quality:'uncommon',atkBonus:3 },
+  leatherVest:  { name:'皮甲',       desc:'DEF+3',        type:'armor',      quality:'uncommon',defBonus:3 },
+  crimsonBlade: { name:'赤红之刃',   desc:'ATK+6',        type:'weapon',     quality:'rare',    atkBonus:6 },
+  lantern:      { name:'灯笼',       desc:'视野+2',       type:'accessory',  quality:'rare',    visionBonus:2 },
+  fireScroll:   { name:'火焰卷轴',   desc:'造成30伤害',   type:'consumable', quality:'uncommon',
+                  effect:'combat_fire' },
+  goldPouch:    { name:'金袋',       desc:'获得50金币',   type:'consumable', quality:'uncommon',
+                  effect: function(g){ g.currency += 50; } }
+};
+
+// =================================================================
+//  5. SHOP INVENTORY PER FLOOR TIER
+// =================================================================
+
+function getShopTier(floor) {
+  if (floor <= 2) return 1;
+  if (floor <= 4) return 2;
+  return 3;
+}
+
+/**
+ * Returns an array of {id, price} for the shop on a given floor.
+ *
+ * Tier 1 (floors 1-2): basic consumables
+ * Tier 2 (floors 3-4): equipment unlocked
+ * Tier 3 (floors 5+):  rare items
+ */
+function getShopInventory(floor) {
+  var tier = getShopTier(floor);
+  var inv = [];
+
+  // Tier 1 — always available
+  inv.push({ id:'health', price: 10 * tier });
+  inv.push({ id:'bread',  price:  8 * tier });
+  inv.push({ id:'water',  price:  8 * tier });
+  inv.push({ id:'torch',  price:  5 * tier });
+  inv.push({ id:'herb',   price:  5 * tier });
+
+  if (tier >= 2) {
+    // Tier 2 — equipment
+    inv.push({ id:'rustySword',  price:40 });
+    inv.push({ id:'leatherVest', price:40 });
+    inv.push({ id:'bandage',     price:12 });
+    inv.push({ id:'fireScroll',  price:25 });
+  }
+
+  if (tier >= 3) {
+    // Tier 3 — rare items
+    inv.push({ id:'crimsonBlade', price:100 });
+    inv.push({ id:'lantern',      price: 80 });
+    inv.push({ id:'goldPouch',    price: 30 });
+  }
+
+  return inv;
+}
+
+// =================================================================
+//  6. CRAFTING RECIPES
+// =================================================================
+
+var RECIPES = [
+  { id:'bandage',    name:'绷带',     mats:[['herb',2]],                        desc:'恢复15HP' },
+  { id:'torch',      name:'火把',     mats:[['wood',1]],                        desc:'扩大视野' },
+  { id:'health',     name:'生命药水', mats:[['herb',2],['water',1]],            desc:'恢复20HP' },
+  { id:'fireScroll', name:'火焰卷轴', mats:[['ore',2],['herb',1]],              desc:'30伤害' }
+];
+
+function canCraft(recipe, inv) {
+  for (var i = 0; i < recipe.mats.length; i++) {
+    var need = recipe.mats[i];
+    var slot = null;
+    for (var j = 0; j < inv.length; j++) {
+      if (inv[j].id === need[0]) { slot = inv[j]; break; }
+    }
+    if (!slot || slot.n < need[1]) return false;
+  }
+  return true;
+}
+
+function doCraft(recipe, inv, addItemFn) {
+  if (!canCraft(recipe, inv)) return false;
+  for (var i = 0; i < recipe.mats.length; i++) {
+    var need = recipe.mats[i];
+    for (var j = 0; j < inv.length; j++) {
+      if (inv[j].id === need[0]) {
+        inv[j].n -= need[1];
+        if (inv[j].n <= 0) inv.splice(j, 1);
+        break;
+      }
+    }
+  }
+  addItemFn(recipe.id);
+  return true;
+}
+
+// =================================================================
+//  7. QUEST TEMPLATES
+// =================================================================
+
+var QUEST_TEMPLATES = [
+  { type:'kill',    gen: function(f){ return { n: 2 + f, reward: 15 * f }; } },
+  { type:'gather',  gen: function(f){ return { n: 1 + f, res: ['wood','ore','herb'][f % 3], reward: 12 * f }; } },
+  { type:'boss',    gen: function(f){ return { f: f, reward: 50 * f }; } },
+  { type:'survive', gen: function(f){ return { f: f, n: 10 + f * 2, reward: 20 * f }; } },
+  { type:'noItem',  gen: function(f){ return { f: f, reward: 40 * f }; } }
+];
+
+/**
+ * Generate a quest for the given floor.
+ * Returns a quest object with {type, desc, progress, target, reward, done, claimed, ...}.
+ */
+function generateQuest(floor) {
+  var t = QUEST_TEMPLATES[Math.floor(Math.random() * QUEST_TEMPLATES.length)];
+  var p = t.gen(floor);
+  var q = { type: t.type, progress: 0, done: false, claimed: false, floor: floor };
+
+  switch (t.type) {
+    case 'kill':
+      q.desc   = '击杀 ' + p.n + ' 只怪物';
+      q.target = p.n;
+      q.reward = p.reward;
+      break;
+    case 'gather':
+      q.desc    = '收集 ' + p.n + ' 个' + ITEMS[p.res].name;
+      q.target  = p.n;
+      q.res     = p.res;
+      q.reward  = p.reward;
+      break;
+    case 'boss':
+      q.desc      = '击败第 ' + p.f + ' 层的BOSS';
+      q.target    = 1;
+      q.bossFloor = p.f;
+      q.reward    = p.reward;
+      break;
+    case 'survive':
+      q.desc             = '在第 ' + p.f + ' 层探索 ' + p.n + ' 步不受伤';
+      q.target           = p.n;
+      q.stepsWithoutDmg  = 0;
+      q.reward           = p.reward;
+      break;
+    case 'noItem':
+      q.desc      = '不使用消耗品通过第 ' + p.f + ' 层';
+      q.target    = 1;
+      q.usedItem  = false;
+      q.reward    = p.reward;
+      break;
+  }
+  return q;
+}
+
+/**
+ * Process a game event against all active quests.
+ * Returns array of newly completed quests.
+ *
+ * Events:
+ *   {type:'kill'}
+ *   {type:'gather', id: itemId}
+ *   {type:'bossKill', floor: N}
+ *   {type:'step', floor: N, damaged: bool}
+ *   {type:'useItem', floor: N}
+ *   {type:'floorClear', floor: N}
+ */
+function processQuestEvent(quests, event) {
+  var completed = [];
+  for (var i = 0; i < quests.length; i++) {
+    var q = quests[i];
+    if (q.done) continue;
+
+    switch (q.type) {
+      case 'kill':
+        if (event.type === 'kill') {
+          q.progress++;
+          if (q.progress >= q.target) { q.done = true; completed.push(q); }
+        }
+        break;
+      case 'gather':
+        if (event.type === 'gather' && q.res === event.id) {
+          q.progress++;
+          if (q.progress >= q.target) { q.done = true; completed.push(q); }
+        }
+        break;
+      case 'boss':
+        if (event.type === 'bossKill' && q.bossFloor === event.floor) {
+          q.progress = 1; q.done = true; completed.push(q);
+        }
+        break;
+      case 'survive':
+        if (event.type === 'step' && q.floor === event.floor) {
+          q.stepsWithoutDmg = event.damaged ? 0 : q.stepsWithoutDmg + 1;
+          if (q.stepsWithoutDmg >= q.target) { q.done = true; completed.push(q); }
+        }
+        break;
+      case 'noItem':
+        if (event.type === 'useItem' && q.floor === event.floor) q.usedItem = true;
+        if (event.type === 'floorClear' && q.floor === event.floor && !q.usedItem) {
+          q.done = true; completed.push(q);
+        }
+        break;
+    }
+  }
+  return completed;
+}
+
+// =================================================================
+//  8. SAVE / LOAD SYSTEM
+// =================================================================
+
+var SAVE_KEY = 'darkness_survival_save';
+
+/**
+ * Serialize and persist game state to localStorage.
+ * Called automatically on floor transitions.
+ * @returns {boolean} success
+ */
+function saveGame(state) {
+  var data = {
+    v:          2,
+    floor:      state.floor,
+    hp:         state.hp,
+    maxHp:      state.maxHp,
+    atk:        state.atk,
+    def:        state.def,
+    level:      state.level,
+    xp:         state.xp,
+    hunger:     state.hunger,
+    thirst:     state.thirst,
+    temp:       state.temp,
+    currency:   state.currency || 0,
+    inv:        state.inv,
+    equip:      state.equip,
+    recipes:    state.unlockedRecipes || [],
+    quests:     state.quests || [],
+    runCount:   state.runCount,
+    visionBonus: state.visionBonus || 0,
+    killsTotal: state.killsTotal || 0,
+    timestamp:  Date.now()
+  };
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Restore game state from localStorage.
+ * @returns {Object|null} saved data, or null if none found.
+ */
+function loadGame() {
+  try {
+    var raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    var data = JSON.parse(raw);
+    return data.v ? data : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function deleteSave() { localStorage.removeItem(SAVE_KEY); }
+function hasSave()    { return localStorage.getItem(SAVE_KEY) !== null; }
+
+// =================================================================
+//  9. MAZE GENERATION
+// =================================================================
+
+/**
+ * Recursive-backtracker maze generator.
+ * Produces a grid where:
+ *   0 = floor, 1 = wall, 2 = stairs down, 3 = resource, 4 = shop, 5 = boss tile
+ */
+function generateMaze(w, h) {
+  var gw = w % 2 === 0 ? w + 1 : w;
+  var gh = h % 2 === 0 ? h + 1 : h;
+  var grid = [], visited = [];
+
+  for (var y = 0; y < gh; y++) {
+    grid[y] = []; visited[y] = [];
+    for (var x = 0; x < gw; x++) { grid[y][x] = 1; visited[y][x] = false; }
+  }
+  grid[1][1] = 0; visited[1][1] = true;
+
+  var dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+
+  function carve(cx, cy) {
+    var d = dirs.slice().sort(function(){ return Math.random() - 0.5; });
+    for (var i = 0; i < d.length; i++) {
+      var nx = cx + d[i][0]*2, ny = cy + d[i][1]*2;
+      if (nx < 1 || nx >= gw-1 || ny < 1 || ny >= gh-1 || visited[ny][nx]) continue;
+      grid[cy + d[i][1]][cx + d[i][0]] = 0;
+      grid[ny][nx] = 0;
+      visited[ny][nx] = true;
+      carve(nx, ny);
+    }
+  }
+  carve(1, 1);
+
+  // Extra passages proportional to map size (wider maps get more)
+  var extras = Math.floor((gw * gh) / 80);
+  for (var ep = 0; ep < extras; ep++) {
+    var ex = 2 + Math.floor(Math.random() * (gw - 4));
+    var ey = 2 + Math.floor(Math.random() * (gh - 4));
+    if (grid[ey][ex] === 1) {
+      var adj = 0;
+      if (ey > 0     && grid[ey-1][ex] === 0) adj++;
+      if (ey < gh-1  && grid[ey+1][ex] === 0) adj++;
+      if (ex > 0     && grid[ey][ex-1] === 0) adj++;
+      if (ex < gw-1  && grid[ey][ex+1] === 0) adj++;
+      if (adj >= 2) grid[ey][ex] = 0;
+    }
+  }
+
+  // Ensure stairs reachable
+  var sx = gw - 2, sy = gh - 2;
+  if (grid[sy][sx] === 1) { grid[sy][sx] = 0; if (sy-1 > 0) grid[sy-1][sx] = 0; }
+  grid[sy][sx] = 2;
+
+  return { grid:grid, w:gw, h:gh, stairs:{ x:sx, y:sy } };
+}
+
+/** Get all walkable floor tiles, optionally excluding a position. */
+function getFloorTiles(maze, exclude) {
+  var tiles = [];
+  for (var y = 1; y < maze.h - 1; y++) {
+    for (var x = 1; x < maze.w - 1; x++) {
+      if (maze.grid[y][x] === 0
+          && !(exclude && x === exclude.x && y === exclude.y)
+          && !(x === 1 && y === 1)) {
+        tiles.push({ x:x, y:y });
+      }
+    }
+  }
+  return tiles.sort(function(){ return Math.random() - 0.5; });
+}
+
+/** Place shop (tile 4) far from stairs. */
+function placeShop(maze) {
+  var tiles = getFloorTiles(maze, maze.stairs);
+  for (var i = 0; i < tiles.length; i++) {
+    var d = Math.abs(tiles[i].x - maze.stairs.x) + Math.abs(tiles[i].y - maze.stairs.y);
+    if (d > maze.w * 0.4) {
+      maze.grid[tiles[i].y][tiles[i].x] = 4;
+      return { x: tiles[i].x, y: tiles[i].y };
+    }
+  }
+  return null;
+}
+
+/** Place boss (tile 5) near stairs. */
+function placeBoss(maze) {
+  var tiles = getFloorTiles(maze, maze.stairs);
+  for (var i = 0; i < tiles.length; i++) {
+    var d = Math.abs(tiles[i].x - maze.stairs.x) + Math.abs(tiles[i].y - maze.stairs.y);
+    if (d > 1 && d < maze.w * 0.3) {
+      maze.grid[tiles[i].y][tiles[i].x] = 5;
+      return { x: tiles[i].x, y: tiles[i].y };
+    }
+  }
+  return null;
+}
+
+// =================================================================
+//  10. GAME STATE
+// =================================================================
+
+function newState() {
+  return {
+    floor:1, runCount:0,
+    px:1, py:1,
+    hp:30, maxHp:30, atk:5, def:4,
+    level:1, xp:0,
+    hunger:100, thirst:100, temp:37,
+    currency:20,
+    inv: [
+      { id:'dagger',  n:1 },
+      { id:'clothes', n:1 },
+      { id:'torch',   n:3 },
+      { id:'bread',   n:5 }
+    ],
+    equip:          { w:null, a:null },
+    quests:         [],
+    unlockedRecipes:[],
+    visionBonus:    0,
+    killsTotal:     0,
+    stepsThisFloor: 0,
+    damageTaken:    false,
+    itemUsed:       false,
+    state:          'menu',
+    diary:          [],
+    maze:null, fog:null, mons:[], items:[],
+    combat:null,
+    bossDefeated:   false
+  };
+}
+
+// =================================================================
+//  11. FLOOR INITIALIZATION
+// =================================================================
+
+function initFloor() {
+  var fd = getFloorData(G.floor);
+  G.maze = generateMaze(fd.w, fd.h);
+
+  // Fog of war
+  G.fog = [];
+  for (var y = 0; y < G.maze.h; y++) {
+    G.fog[y] = [];
+    for (var x = 0; x < G.maze.w; x++) G.fog[y][x] = 0;
+  }
+  G.px = 1; G.py = 1;
+  revealFog(1, 1, 3 + (G.visionBonus || 0));
+
+  // Resource nodes (tile 3)
+  var resCount = getResourceCount(G.floor);
+  var tiles = getFloorTiles(G.maze, { x:1, y:1 });
+  var idx = 0;
+  for (var ri = 0; ri < resCount && ri < tiles.length; ri++, idx++) {
+    G.maze.grid[tiles[ri].y][tiles[ri].x] = 3;
+  }
+
+  // Shop (tile 4)
+  if (fd.shop) placeShop(G.maze);
+
+  // Monsters — scaled from enemy pool
+  G.mons = [];
+  var pool = fd.enemies.map(function(k){ return ENEMY_DEFS[k]; }).filter(Boolean);
+  var monCount = getMonsterCount(G.floor);
+  for (var mi = 0; mi < monCount && idx < tiles.length; mi++, idx++) {
+    var tpl = pool[Math.floor(Math.random() * pool.length)];
+    var mon = createScaledEnemy(fd.enemies[Math.floor(Math.random() * fd.enemies.length)], G.floor);
+    mon.x = tiles[idx].x;
+    mon.y = tiles[idx].y;
+    G.mons.push(mon);
+  }
+
+  // Boss
+  if (fd.boss) {
+    var bp = placeBoss(G.maze);
+    if (bp) {
+      var boss = createBoss(G.floor);
+      boss.x = bp.x; boss.y = bp.y;
+      G.mons.push(boss);
+    }
+  }
+
+  // Ground items
+  G.items = [];
+  var itemPool = ['health','bread','water','herb','wood','ore'];
+  var itemCount = 2 + Math.floor(Math.random() * 3);
+  for (var ii = 0; ii < itemCount && idx < tiles.length; ii++, idx++) {
+    G.items.push({
+      id: itemPool[Math.floor(Math.random() * itemPool.length)],
+      x: tiles[idx].x, y: tiles[idx].y
+    });
+  }
+
+  // Generate a quest for this floor if player has fewer than 2 active
+  var active = G.quests.filter(function(q){ return !q.done && q.floor === G.floor; });
+  if (active.length < 2) G.quests.push(generateQuest(G.floor));
+
+  G.bossDefeated   = false;
+  G.stepsThisFloor = 0;
+  G.damageTaken    = false;
+  G.itemUsed       = false;
+  G.diary = ['第 ' + G.floor + ' 层 — ' + fd.desc];
+
+  // Auto-save on floor transition
+  saveGame(G);
+}
+
+function revealFog(cx, cy, r) {
+  for (var y = 0; y < G.fog.length; y++)
+    for (var x = 0; x < G.fog[0].length; x++)
+      if (G.fog[y][x] === 2) G.fog[y][x] = 1;
+
+  for (var y2 = Math.max(0, cy-r); y2 <= Math.min(G.fog.length-1, cy+r); y2++)
+    for (var x2 = Math.max(0, cx-r); x2 <= Math.min(G.fog[0].length-1, cx+r); x2++)
+      if (Math.abs(x2-cx) + Math.abs(y2-cy) <= r) G.fog[y2][x2] = 2;
+}
+
+// =================================================================
+//  12. COMBAT (inline, mirrors combat.html structure)
+// =================================================================
+
+function getTotalAtk() {
+  var w = G.equip.w;
+  return G.atk + (w && ITEMS[w] && ITEMS[w].atkBonus ? ITEMS[w].atkBonus : 0);
+}
+function getTotalDef() {
+  var a = G.equip.a;
+  return G.def + (a && ITEMS[a] && ITEMS[a].defBonus ? ITEMS[a].defBonus : 0);
+}
+
+function startCombat(mon) {
+  G.combat = { enemy: mon, log: ['遭遇 ' + mon.name + (mon.isBoss ? ' [BOSS]' : '') + '！'], powered:false };
+  renderCombat();
+}
+
+function doAttack() {
+  var c = G.combat;
+  var dmg = Math.max(1, (c.powered ? Math.floor(getTotalAtk()*1.5) : getTotalAtk()) - c.enemy.def);
+  c.powered = false;
+  c.enemy.hp -= dmg;
+  c.log.push('造成 ' + dmg + ' 点伤害');
+
+  if (c.enemy.hp <= 0) {
+    c.enemy.alive = false;
+    G.xp += c.enemy.xp;
+    G.killsTotal++;
+    checkLevelUp();
+    processQuestEvent(G.quests, { type:'kill' });
+    if (c.enemy.isBoss) processQuestEvent(G.quests, { type:'bossKill', floor:G.floor });
+
+    // Gold drop
+    var gold = Math.floor(3 + G.floor * 2 + Math.random() * 5);
+    G.currency += gold;
+    G.diary.push('获得 ' + gold + ' 金币');
+
+    // Item drop (40%)
+    if (Math.random() < 0.4) {
+      var drops = ['health','bread','herb','water','wood','ore'];
+      var dr = drops[Math.floor(Math.random() * drops.length)];
+      addItem(dr);
+      G.diary.push('掉落: ' + ITEMS[dr].name);
+    }
+
+    G.mons = G.mons.filter(function(m){ return m.alive; });
+    G.diary.push('击败了 ' + c.enemy.name + '！');
+    G.combat = null;
+    render();
+    return;
+  }
+
+  // Enemy counterattack
+  var md = Math.max(1, c.enemy.atk - getTotalDef());
+  G.hp -= md;
+  G.damageTaken = true;
+  c.log.push('受到 ' + md + ' 点伤害');
+  if (G.hp <= 0) { G.hp = 0; die(); return; }
+  renderCombat();
+}
+
+function doPower()  { if (!G.combat) return; G.combat.powered = true; G.combat.log.push('蓄力！下次攻击1.5x'); enemyAttack(); }
+function doDefend() { if (!G.combat) return; G.combat.log.push('防御中...'); enemyAttackHalf(); }
+function doFlee()   {
+  if (!G.combat) return;
+  if (Math.random() < 0.4) { G.combat = null; G.diary.push('逃脱！'); render(); }
+  else { G.combat.log.push('逃跑失败！'); enemyAttack(); }
+}
+
+function enemyAttack() {
+  var md = Math.max(1, G.combat.enemy.atk - getTotalDef());
+  G.hp -= md; G.damageTaken = true;
+  G.combat.log.push('受到 ' + md + ' 点伤害');
+  if (G.hp <= 0) { G.hp = 0; die(); return; }
+  renderCombat();
+}
+function enemyAttackHalf() {
+  var md = Math.max(1, Math.floor((G.combat.enemy.atk - getTotalDef()) * 0.5));
+  G.hp -= md; G.damageTaken = true;
+  G.combat.log.push('防御！受到 ' + md + ' 点伤害');
+  if (G.hp <= 0) { G.hp = 0; die(); return; }
+  renderCombat();
+}
+
+function useCombatItem(id) {
+  useItem(id);
+  if (G.combat) enemyAttack();
+}
+
+function checkLevelUp() {
+  var need = getXPForLevel(G.level);
+  while (G.xp >= need) {
+    G.xp -= need;
+    G.level++;
+    G.maxHp += 5;
+    G.hp = Math.min(G.hp + 5, G.maxHp);
+    G.atk += 2;
+    G.def += 1;
+    G.diary.push('升级！ Lv.' + G.level);
+    need = getXPForLevel(G.level);
+  }
+}
+
+// =================================================================
+//  13. MOVEMENT & INTERACTION
+// =================================================================
+
+function tryMove(dx, dy) {
+  if (G.state !== 'play' || G.combat) return;
+  var nx = G.px + dx, ny = G.py + dy;
+  if (nx < 0 || nx >= G.maze.w || ny < 0 || ny >= G.maze.h) return;
+  if (G.maze.grid[ny][nx] === 1) return;
+
+  G.px = nx; G.py = ny;
+  revealFog(nx, ny, 3 + (G.visionBonus || 0));
+  var tile = G.maze.grid[ny][nx];
+
+  // Stairs (tile 2) — advance floor
+  if (tile === 2) {
+    processQuestEvent(G.quests, { type:'floorClear', floor:G.floor });
+    G.floor++;
+    initFloor();
+    render();
+    return;
+  }
+
+  // Resource (tile 3)
+  if (tile === 3) {
+    var res = ['wood','ore','herb'];
+    var r = res[Math.floor(Math.random() * res.length)];
+    addItem(r);
+    processQuestEvent(G.quests, { type:'gather', id:r });
+    G.maze.grid[ny][nx] = 0;
+    G.diary.push('采集: ' + ITEMS[r].name);
+  }
+
+  // Shop (tile 4)
+  if (tile === 4) { showShop(); return; }
+
+  // Pick up ground items
+  for (var ii = G.items.length-1; ii >= 0; ii--) {
+    if (G.items[ii].x === nx && G.items[ii].y === ny) {
+      addItem(G.items[ii].id);
+      processQuestEvent(G.quests, { type:'gather', id:G.items[ii].id });
+      G.diary.push('拾取: ' + ITEMS[G.items[ii].id].name);
+      G.items.splice(ii, 1);
+      break;
+    }
+  }
+
+  // Monster collision
+  for (var mi = 0; mi < G.mons.length; mi++) {
+    if (G.mons[mi].alive && G.mons[mi].x === nx && G.mons[mi].y === ny) {
+      startCombat(G.mons[mi]);
+      return;
+    }
+  }
+
+  // Survival costs
+  G.hunger = Math.max(0, G.hunger - 2);
+  G.thirst = Math.max(0, G.thirst - 3);
+  G.temp   = Math.max(0, G.temp   - 0.5);
+  if (G.hunger <= 0) { G.hp -= 3; G.diary.push('饥饿！HP-3'); }
+  if (G.thirst <= 0) { G.hp -= 5; G.diary.push('口渴！HP-5'); }
+  if (G.temp   <= 0) { G.hp -= 4; G.diary.push('失温！HP-4'); }
+  if (G.hp <= 0) { G.hp = 0; die(); return; }
+
+  G.stepsThisFloor++;
+  processQuestEvent(G.quests, { type:'step', floor:G.floor, damaged:G.damageTaken });
+
+  render();
+}
+
+// =================================================================
+//  14. INVENTORY HELPERS
+// =================================================================
+
+function addItem(id) {
+  for (var i = 0; i < G.inv.length; i++) {
+    if (G.inv[i].id === id) { G.inv[i].n++; return; }
+  }
+  G.inv.push({ id:id, n:1 });
+}
+
+function removeItem(id) {
+  for (var i = 0; i < G.inv.length; i++) {
+    if (G.inv[i].id === id) {
+      G.inv[i].n--;
+      if (G.inv[i].n <= 0) G.inv.splice(i, 1);
+      return true;
+    }
+  }
+  return false;
+}
+
+function useItem(id) {
+  var item = ITEMS[id];
+  if (!item) return;
+  if (item.type === 'consumable') {
+    if (typeof item.effect === 'function') {
+      item.effect(G);
+      removeItem(id);
+      G.itemUsed = true;
+      G.diary.push('使用了 ' + item.name);
+    } else if (item.effect === 'combat_fire' && G.combat) {
+      G.combat.enemy.hp -= 30;
+      G.combat.log.push('火焰卷轴造成30点伤害！');
+      removeItem(id);
+      G.itemUsed = true;
+      if (G.combat.enemy.hp <= 0) {
+        G.combat.enemy.alive = false;
+        G.xp += G.combat.enemy.xp;
+        G.killsTotal++;
+        checkLevelUp();
+        G.mons = G.mons.filter(function(m){ return m.alive; });
+        G.combat = null;
+      }
+    }
+  } else if (item.type === 'weapon') {
+    if (G.equip.w) addItem(G.equip.w);
+    G.equip.w = id; removeItem(id);
+    G.diary.push('装备了 ' + item.name);
+  } else if (item.type === 'armor') {
+    if (G.equip.a) addItem(G.equip.a);
+    G.equip.a = id; removeItem(id);
+    G.diary.push('装备了 ' + item.name);
+  } else if (item.type === 'accessory') {
+    if (item.visionBonus) G.visionBonus = (G.visionBonus || 0) + item.visionBonus;
+    removeItem(id);
+    G.diary.push('装备了 ' + item.name);
+  }
+  render();
+}
+
+// =================================================================
+//  15. UI RENDERING
+// =================================================================
+
+function render() {
+  if (G.state === 'menu') return renderMenu();
+  if (G.state === 'dead') return renderDeath();
+
+  // Top bar
+  var tb = document.getElementById('topbar');
+  tb.innerHTML =
+    '<span class="clr-floor">F' + G.floor + '</span> ' +
+    '<span>Lv.' + G.level + '</span> ' +
+    '<span class="clr-hp">HP ' + G.hp + '/' + G.maxHp + '</span> ' +
+    '<span>ATK ' + getTotalAtk() + '</span> ' +
+    '<span>DEF ' + getTotalDef() + '</span> ' +
+    '<span class="clr-food">饱 ' + Math.round(G.hunger) + '</span> ' +
+    '<span class="clr-water">渴 ' + Math.round(G.thirst) + '</span> ' +
+    '<span class="clr-temp">温 ' + G.temp.toFixed(0) + '</span> ' +
+    '<span class="clr-gold">金 ' + G.currency + '</span>';
+
+  // Map viewport
+  var mapEl = document.getElementById('map');
+  var html = '';
+  var half = 7;
+  for (var dy = -half; dy <= half; dy++) {
+    for (var dx = -half; dx <= half; dx++) {
+      var mx = G.px + dx, my = G.py + dy;
+      if (mx < 0 || mx >= G.maze.w || my < 0 || my >= G.maze.h) { html += ' '; continue; }
+      if (G.fog[my][mx] === 0) { html += '<span style="color:#181818">#</span>'; continue; }
+      var tile = G.maze.grid[my][mx];
+      var hasMon = false, monIcon = 'M';
+      for (var mi2 = 0; mi2 < G.mons.length; mi2++) {
+        if (G.mons[mi2].alive && G.mons[mi2].x === mx && G.mons[mi2].y === my) {
+          hasMon = true; monIcon = G.mons[mi2].icon; break;
+        }
+      }
+      var hasItem = false;
+      for (var ii2 = 0; ii2 < G.items.length; ii2++)
+        if (G.items[ii2].x === mx && G.items[ii2].y === my) { hasItem = true; break; }
+
+      if (dx === 0 && dy === 0)                html += '<span style="color:#fff;font-weight:bold">@</span>';
+      else if (hasMon)                          html += '<span style="color:#e74c3c;font-weight:bold">' + monIcon + '</span>';
+      else if (hasItem)                         html += '<span style="color:#f1c40f">*</span>';
+      else if (tile === 1)                      html += '<span style="color:#555">#</span>';
+      else if (tile === 2)                      html += '<span style="color:#2ecc71;font-weight:bold">&gt;</span>';
+      else if (tile === 3)                      html += '<span style="color:#e67e22">o</span>';
+      else if (tile === 4)                      html += '<span style="color:#9b59b6;font-weight:bold">S</span>';
+      else if (tile === 5)                      html += '<span style="color:#e74c3c;font-weight:bold">B</span>';
+      else                                      html += '<span style="color:#333">.</span>';
+    }
+    html += '\n';
+  }
+  mapEl.innerHTML = html;
+
+  // Diary
+  var dEl = document.getElementById('diary');
+  var start = Math.max(0, G.diary.length - 8);
+  var dh = '';
+  for (var di = start; di < G.diary.length; di++) dh += G.diary[di] + '<br>';
+  dEl.innerHTML = dh;
+  dEl.scrollTop = dEl.scrollHeight;
+
+  // Buttons
+  document.getElementById('buttons').innerHTML =
+    '<button onclick="showBag()">背包</button>' +
+    '<button onclick="showCraft()">制作</button>' +
+    '<button onclick="showQuests()">任务</button>' +
+    '<button onclick="showStats()">属性</button>' +
+    '<button onclick="doSave()">保存</button>';
+}
+
+function renderCombat() {
+  var c = G.combat, e = c.enemy;
+  document.getElementById('topbar').innerHTML =
+    '<span style="color:#e74c3c;font-size:16px">战斗中</span>';
+  document.getElementById('map').innerHTML =
+    '\n   ' + e.icon + ' ' + e.name + (e.isBoss ? ' [BOSS]' : '') +
+    '\n   HP: ' + e.hp + '/' + e.maxHp + '  ATK: ' + e.atk + '  DEF: ' + e.def +
+    '\n\n   你的 HP: ' + G.hp + '/' + G.maxHp +
+    '\n   ATK: ' + getTotalAtk() + '  DEF: ' + getTotalDef() +
+    (c.powered ? '\n   <span style="color:#f1c40f">蓄力中！下次攻击1.5倍</span>' : '');
+
+  var lh = '';
+  var ls = Math.max(0, c.log.length - 6);
+  for (var i = ls; i < c.log.length; i++) lh += c.log[i] + '<br>';
+  document.getElementById('diary').innerHTML = lh;
+
+  var b = '<button onclick="doAttack()">攻击</button>' +
+          '<button onclick="doPower()">蓄力</button>' +
+          '<button onclick="doDefend()">防御</button>' +
+          '<button onclick="doFlee()">逃跑</button>';
+  if (G.inv.find(function(s){ return s.id === 'fireScroll'; }))
+    b += '<button onclick="useCombatItem(\'fireScroll\')">火焰卷轴</button>';
+  if (G.inv.find(function(s){ return s.id === 'health'; }))
+    b += '<button onclick="useCombatItem(\'health\')">生命药水</button>';
+  document.getElementById('buttons').innerHTML = b;
+}
+
+function renderMenu() {
+  document.getElementById('topbar').innerHTML =
+    '<span style="color:#f1c40f;font-size:18px">黑暗生存 Darkness Survival</span>';
+  document.getElementById('map').innerHTML =
+    '\n\n   探索地牢迷宫，在黑暗中求生。\n\n' +
+    '   @=你  M=怪物  >=楼梯  o=资源\n' +
+    '   S=商店  B=BOSS  *=物品\n\n' +
+    '   WASD / 方向键移动\n\n' +
+    '   6+层地牢，层层递进的挑战等待着你。\n';
+  document.getElementById('diary').innerHTML = '版本 1.0 — Level System Module';
+
+  var b = '<button onclick="startGame()">新游戏</button>';
+  if (hasSave()) b += '<button onclick="continueGame()">继续游戏</button>';
+  b += '<button onclick="deleteSaveBtn()" style="color:#e74c3c">删除存档</button>';
+  document.getElementById('buttons').innerHTML = b;
+}
+
+function renderDeath() {
+  document.getElementById('topbar').innerHTML =
+    '<span style="color:#e74c3c;font-size:18px">你死了</span>';
+  document.getElementById('map').innerHTML =
+    '\n\n   第 ' + G.floor + ' 层 | Lv.' + G.level +
+    '\n   击杀: ' + G.killsTotal + ' | 金币: ' + G.currency +
+    '\n   第 ' + G.runCount + ' 次冒险';
+  document.getElementById('diary').innerHTML = '死亡不是终点，而是新的开始...';
+  document.getElementById('buttons').innerHTML =
+    '<button onclick="startGame()">重新开始</button>' +
+    '<button onclick="renderMenu()">主菜单</button>';
+}
+
+// =================================================================
+//  16. OVERLAY PANELS
+// =================================================================
+
+function showOverlay(title, body) {
+  var inner = document.getElementById('overlay-inner');
+  inner.innerHTML = '<h2>' + title + '</h2>' + body +
+    '<button class="close-btn" onclick="closeOverlay()">关闭</button>';
+  document.getElementById('overlay').classList.add('show');
+}
+function closeOverlay() {
+  document.getElementById('overlay').classList.remove('show');
+  render();
+}
+
+function showBag() {
+  var h = '<div style="font-size:13px;color:#999;margin-bottom:8px">装备: 武器=' +
+    (G.equip.w && ITEMS[G.equip.w] ? ITEMS[G.equip.w].name : '无') +
+    ' 护甲=' + (G.equip.a && ITEMS[G.equip.a] ? ITEMS[G.equip.a].name : '无') +
+    ' | 金币: <span style="color:#f1c40f">' + G.currency + '</span></div>';
+  if (G.inv.length === 0) h += '<p>空空如也</p>';
+  for (var i = 0; i < G.inv.length; i++) {
+    var s = G.inv[i], it = ITEMS[s.id];
+    if (!it) continue;
+    h += '<div class="bag-item"><span>' + it.name + ' x' + s.n +
+      ' <span style="color:#666">(' + it.desc + ')</span></span><span>';
+    if (it.type === 'consumable') h += '<button onclick="useItem(\'' + s.id + '\');showBag()">使用</button>';
+    else if (it.type === 'weapon' || it.type === 'armor') h += '<button onclick="useItem(\'' + s.id + '\');showBag()">装备</button>';
+    h += '</span></div>';
+  }
+  showOverlay('背包', h);
+}
+
+function showShop() {
+  var tier = getShopTier(G.floor);
+  var inv = getShopInventory(G.floor);
+  var h = '<div style="font-size:13px;color:#999;margin-bottom:8px">第 ' + G.floor + ' 层 商店 (Tier ' + tier + ') | 金币: <span style="color:#f1c40f">' + G.currency + '</span></div>';
+  for (var i = 0; i < inv.length; i++) {
+    var si = inv[i], it = ITEMS[si.id];
+    if (!it) continue;
+    var can = G.currency >= si.price;
+    h += '<div class="shop-item"><span>' + it.name + ' - ' + it.desc + '</span>' +
+      '<span style="color:#f1c40f">' + si.price + '金 ' +
+      (can ? '<button onclick="buyItem(\'' + si.id + '\',' + si.price + ')">买</button>' : '<span style="color:#e74c3c">不足</span>') +
+      '</span></div>';
+  }
+  showOverlay('商店', h);
+}
+
+function buyItem(id, price) {
+  if (G.currency < price) return;
+  G.currency -= price;
+  addItem(id);
+  G.diary.push('购买 ' + ITEMS[id].name + ' (-' + price + '金)');
+  showShop();
+}
+
+function showCraft() {
+  var h = '<div style="font-size:13px;color:#999;margin-bottom:8px">选择配方制作</div>';
+  for (var i = 0; i < RECIPES.length; i++) {
+    var r = RECIPES[i];
+    var ms = r.mats.map(function(m){ return ITEMS[m[0]].name + 'x' + m[1]; }).join(' + ');
+    var can = canCraft(r, G.inv);
+    h += '<div class="craft-row"><span>' + r.name + ' <span style="color:#666">(' + r.desc + ') 需要: ' + ms + '</span></span>' +
+      (can ? '<button onclick="doCraftItem(' + i + ')">制作</button>' : '<span style="color:#e74c3c">不足</span>') +
+      '</div>';
+  }
+  showOverlay('制作', h);
+}
+
+function doCraftItem(idx) {
+  if (doCraft(RECIPES[idx], G.inv, addItem)) G.diary.push('制作了 ' + RECIPES[idx].name);
+  showCraft();
+}
+
+function showQuests() {
+  var active = G.quests.filter(function(q){ return !q.done; });
+  var done   = G.quests.filter(function(q){ return q.done; });
+  var h = '';
+  if (active.length === 0) h += '<p>当前没有活跃任务</p>';
+  for (var i = 0; i < active.length; i++) {
+    var q = active[i];
+    h += '<div class="quest-item"><span>' + q.desc + '</span>' +
+      '<span style="color:#f1c40f">' + q.progress + '/' + q.target + ' 奖励:' + q.reward + '金</span></div>';
+  }
+  if (done.length) {
+    h += '<h3 style="color:#666;margin-top:10px;font-size:14px">已完成</h3>';
+    for (var j = 0; j < done.length; j++) {
+      h += '<div class="quest-item"><span style="color:#2ecc71">' + done[j].desc + '</span>' +
+        '<span style="color:#f1c40f">+' + done[j].reward + '金 ' +
+        (done[j].claimed ? '已领' : '<button onclick="claimReward(' + j + ')">领取</button>') +
+        '</span></div>';
+    }
+  }
+  showOverlay('任务', h);
+}
+
+function claimReward(idx) {
+  var done = G.quests.filter(function(q){ return q.done; });
+  var q = done[idx];
+  if (!q || q.claimed) return;
+  G.currency += q.reward;
+  q.claimed = true;
+  G.diary.push('任务奖励: ' + q.desc + ' (+' + q.reward + '金)');
+  showQuests();
+}
+
+function showStats() {
+  var need = getXPForLevel(G.level);
+  var fd = getFloorData(G.floor);
+  var h = '<div style="line-height:2">' +
+    '等级: Lv.' + G.level + '<br>' +
+    'HP: ' + G.hp + '/' + G.maxHp + '<br>' +
+    'ATK: ' + G.atk + ' (+' + (getTotalAtk() - G.atk) + ' 装备)<br>' +
+    'DEF: ' + G.def + ' (+' + (getTotalDef() - G.def) + ' 装备)<br>' +
+    'EXP: ' + G.xp + '/' + need + '<br>' +
+    '楼层: ' + G.floor + '<br>' +
+    '金币: <span style="color:#f1c40f">' + G.currency + '</span><br>' +
+    '击杀: ' + G.killsTotal + '<br>' +
+    '怪物倍率: x' + getStatMultiplier(G.floor).toFixed(1) + '<br>' +
+    '视野: ' + (3 + (G.visionBonus || 0)) + '<br>' +
+    '</div>';
+  showOverlay('属性', h);
+}
+
+// =================================================================
+//  17. GAME FLOW
+// =================================================================
+
+function startGame() {
+  deleteSave();
+  G = newState();
+  G.runCount = 1;
+  G.state = 'play';
+  initFloor();
+  render();
+}
+
+function continueGame() {
+  var d = loadGame();
+  if (!d) { startGame(); return; }
+  G = newState();
+  G.floor       = d.floor       || 1;
+  G.hp          = d.hp          || 30;
+  G.maxHp       = d.maxHp       || 30;
+  G.atk         = d.atk         || 5;
+  G.def         = d.def         || 4;
+  G.level       = d.level       || 1;
+  G.xp          = d.xp          || 0;
+  G.hunger      = d.hunger      || 100;
+  G.thirst      = d.thirst      || 100;
+  G.temp        = d.temp        || 37;
+  G.currency    = d.currency    || 0;
+  G.inv         = d.inv         || [];
+  G.equip       = d.equip       || { w:null, a:null };
+  G.unlockedRecipes = d.recipes || [];
+  G.quests      = d.quests      || [];
+  G.runCount    = d.runCount    || 1;
+  G.visionBonus = d.visionBonus || 0;
+  G.killsTotal  = d.killsTotal  || 0;
+  G.state = 'play';
+  initFloor();
+  G.diary.push('存档读取成功');
+  render();
+}
+
+function doSave() {
+  G.diary.push(saveGame(G) ? '保存成功' : '保存失败');
+  render();
+}
+
+function deleteSaveBtn() { deleteSave(); renderMenu(); }
+
+function die() {
+  G.state = 'dead';
+  deleteSave();
+  renderDeath();
+}
+
+// =================================================================
+//  18. INPUT
+// =================================================================
+
+document.addEventListener('keydown', function(e) {
+  if (G.state !== 'play') return;
+  var k = e.key;
+  if (k === 'w' || k === 'ArrowUp')    { e.preventDefault(); tryMove(0,-1); }
+  if (k === 's' || k === 'ArrowDown')   { e.preventDefault(); tryMove(0, 1); }
+  if (k === 'a' || k === 'ArrowLeft')   { e.preventDefault(); tryMove(-1,0); }
+  if (k === 'd' || k === 'ArrowRight')  { e.preventDefault(); tryMove(1, 0); }
+  if (k === 'Escape') closeOverlay();
+});
+
+// =================================================================
+//  19. INIT
+// =================================================================
+
+var G = null;
+renderMenu();
+
+</script>
+</body>
+</html>

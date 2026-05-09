@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Darkness Survival - Combat System</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0a; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Courier New', monospace; }
+canvas { border: 1px solid #333; cursor: pointer; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="combat" width="720" height="540"></canvas>
+
+<script>
+// ==========================================================================
+// Darkness Survival - Combat System Module
+// Pure JavaScript + HTML5 Canvas, no dependencies
+// ==========================================================================
+
+'use strict';
+
+// --------------------------------------------------------------------------
+// Enemy class
+// --------------------------------------------------------------------------
+
+/**
+ * Represents a single enemy in combat.
+ *
+ * @param {Object} config
+ * @param {string} config.name      - Display name (e.g. "Zombie")
+ * @param {string} config.icon      - Emoji or single-char icon
+ * @param {number} config.hp        - Current / max hit points
+ * @param {number} config.atk       - Attack power
+ * @param {number} config.def       - Defense value
+ * @param {number} config.xpReward  - XP granted on defeat
+ * @param {string} config.tier      - "normal" | "elite" | "boss"
+ * @param {Array}  config.drops     - [{itemId, chance}] drop table
+ * @param {Array}  config.skills    - [{name, cooldown, effect}] boss only
+ */
+class Enemy {
+    constructor(config) {
+        this.name     = config.name   || 'Unknown';
+        this.icon     = config.icon   || '?';
+        this.hp       = config.hp     || 10;
+        this.maxHp    = config.hp     || 10;
+        this.atk      = config.atk    || 2;
+        this.def      = config.def    || 0;
+        this.xpReward = config.xpReward || 5;
+        this.tier     = config.tier   || 'normal';   // normal | elite | boss
+        this.drops    = config.drops  || [];          // [{itemId, chance}]
+        this.skills   = config.skills || [];          // [{name, cooldown, effect}]
+        this.alive    = true;
+
+        // Per-skill cooldown tracking (boss)
+        this._skillTimers = this.skills.map(() => 0);
+    }
+
+    /**
+     * Apply damage to this enemy. Returns actual damage dealt.
+     * @param {number} amount
+     * @returns {number}
+     */
+    takeDamage(amount) {
+        if (!this.alive) return 0;
+        var dmg = Math.max(0, amount);
+        this.hp -= dmg;
+        if (this.hp <= 0) {
+            this.hp = 0;
+            this.alive = false;
+        }
+        return dmg;
+    }
+
+    /**
+     * Returns a short info string for examine action.
+     */
+    getInfo() {
+        var info = this.name + ' [' + this.tier.toUpperCase() + ']';
+        info += '  HP:' + this.hp + '/' + this.maxHp;
+        info += '  ATK:' + this.atk + '  DEF:' + this.def;
+        if (this.skills.length > 0) {
+            info += '\nSkills: ' + this.skills.map(function(s) { return s.name; }).join(', ');
+        }
+        return info;
+    }
+}
+
+// --------------------------------------------------------------------------
+// Floating damage / heal numbers
+// --------------------------------------------------------------------------
+
+/** A single floating text that drifts upward and fades out. */
+class FloatingText {
+    constructor(x, y, text, color) {
+        this.x      = x;
+        this.y      = y;
+        this.text   = text;
+        this.color  = color || '#ff4444';
+        this.life   = 1.0;   // 1.0 -> 0.0
+        this.speed  = 60;    // pixels per second upward
+    }
+
+    update(dt) {
+        this.life -= dt * 1.2;
+        this.y -= this.speed * dt;
+    }
+
+    draw(ctx) {
+        if (this.life <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.fillStyle   = this.color;
+        ctx.font        = 'bold 22px "Courier New", monospace';
+        ctx.textAlign   = 'center';
+        ctx.fillText(this.text, this.x, this.y);
+        ctx.restore();
+    }
+
+    get dead() { return this.life <= 0; }
+}
+
+// --------------------------------------------------------------------------
+// Combat log entry
+// --------------------------------------------------------------------------
+
+var LOG_COLORS = {
+    damage:  '#ff5555',   // red
+    enemy:   '#ff8844',   // orange-red
+    heal:    '#55ff55',   // green
+    info:    '#aaaaaa',   // gray
+    reward:  '#ffdd44',   // yellow
+    system:  '#88aaff'    // blue
+};
+
+// --------------------------------------------------------------------------
+// CombatManager
+// --------------------------------------------------------------------------
+
+/**
+ * Central combat controller. Owns player stats, enemy list, turn state,
+ * combat log, floating texts, and the UI renderer reference.
+ */
+class CombatManager {
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx    = canvas.getContext('2d');
+
+        // Player stats (mirrors the game's G object fields)
+        this.player = null;    // { hp, maxHp, atk, def, level, xp, getTotalAtk, getTotalDef }
+
+        // Enemies array
+        this.enemies = [];
+
+        // Combat log: [{text, color}]
+        this.log = [];
+
+        // Floating text pool
+        this.floatingTexts = [];
+
+        // Turn state
+        this.playerTurn    = true;
+        this.defending     = false;   // true = take 0.5x damage this turn
+        this.powered       = false;   // true = next attack 1.5x
+        this.combatOver    = false;
+        this.victory       = false;
+
+        // Currently selected target (index into enemies)
+        this.targetIndex = 0;
+
+        // UI button hitboxes [{x, y, w, h, action, label}]
+        this.buttons = [];
+
+        // Enemy hitboxes for targeting [{x, y, w, h, index}]
+        this.enemyAreas = [];
+
+        // Animation clock
+        this._lastTime = 0;
+        this._running  = false;
+
+        // Callback for when combat ends (external integration point)
+        this.onCombatEnd = null; // function(won, drops, xp)
+
+        // Bind click handler
+        var self = this;
+        this.canvas.addEventListener('click', function(e) { self._onClick(e); });
+    }
+
+    // ------ Initialization ------
+
+    /**
+     * Start a new combat encounter.
+     *
+     * @param {Object} playerStats - { hp, maxHp, atk, def, level, xp, getTotalAtk(), getTotalDef() }
+     * @param {Enemy[]} enemies    - Array of Enemy instances
+     */
+    startCombat(playerStats, enemies) {
+        this.player        = playerStats;
+        this.enemies       = enemies;
+        this.log           = [];
+        this.floatingTexts = [];
+        this.playerTurn    = true;
+        this.defending     = false;
+        this.powered       = false;
+        this.combatOver    = false;
+        this.victory       = false;
+        this.targetIndex   = 0;
+
+        // Auto-select first alive enemy
+        this._selectNextTarget();
+
+        this.addLog('A wild encounter!', 'system');
+        for (var i = 0; i < enemies.length; i++) {
+            var prefix = enemies[i].tier === 'boss' ? '[BOSS] ' : enemies[i].tier === 'elite' ? '[ELITE] ' : '';
+            this.addLog(prefix + enemies[i].name + ' appears!', 'info');
+        }
+
+        // Start game loop
+        this._running  = true;
+        this._lastTime = performance.now();
+        requestAnimationFrame(function(t) { this._loop(t); }.bind(this));
+    }
+
+    // ------ Player actions ------
+
+    /**
+     * Player attacks the enemy at targetIndex.
+     * Damage = max(1, effectiveAtk - enemyDef).
+     * If powered, effectiveAtk *= 1.5.
+     */
+    playerAttack(targetIndex) {
+        if (!this.playerTurn || this.combatOver) return;
+        if (targetIndex !== undefined) this.targetIndex = targetIndex;
+
+        var enemy = this.enemies[this.targetIndex];
+        if (!enemy || !enemy.alive) {
+            this._selectNextTarget();
+            enemy = this.enemies[this.targetIndex];
+        }
+        if (!enemy || !enemy.alive) return;
+
+        var atk = this.player.getTotalAtk();
+        if (this.powered) {
+            atk = Math.floor(atk * 1.5);
+            this.powered = false;
+        }
+        var dmg = Math.max(1, atk - enemy.def);
+        var actual = enemy.takeDamage(dmg);
+
+        this.addLog('You attack ' + enemy.name + ' for ' + actual + ' damage!', 'damage');
+        this._spawnFloatingText(this.targetIndex, '-' + actual, '#ff4444');
+
+        if (!enemy.alive) {
+            this.addLog(enemy.name + ' defeated!', 'reward');
+            this._selectNextTarget();
+        }
+
+        if (this.checkVictory()) {
+            this._endCombat(true);
+            return;
+        }
+
+        this.defending = false;
+        this._endPlayerTurn();
+    }
+
+    /**
+     * Power Up: next attack deals 1.5x damage.
+     * Ends the player's turn (enemies still attack).
+     */
+    playerPowerUp() {
+        if (!this.playerTurn || this.combatOver) return;
+        this.powered = true;
+        this.addLog('Power Up! Next attack deals 1.5x damage.', 'system');
+        this.defending = false;
+        this._endPlayerTurn();
+    }
+
+    /**
+     * Defend: take 0.5x damage from all enemy attacks this round.
+     */
+    playerDefend() {
+        if (!this.playerTurn || this.combatOver) return;
+        this.defending = true;
+        this.addLog('Defending! Damage taken halved this turn.', 'system');
+        this._endPlayerTurn();
+    }
+
+    /**
+     * Attempt to flee. 40% base escape chance.
+     * On failure, enemies still get their turn.
+     */
+    playerFlee() {
+        if (!this.playerTurn || this.combatOver) return;
+        var chance = 0.4;
+        if (Math.random() < chance) {
+            this.addLog('You fled from combat!', 'system');
+            this.combatOver = true;
+            this._running = false;
+            if (this.onCombatEnd) this.onCombatEnd(false, [], 0);
+        } else {
+            this.addLog('Failed to flee!', 'enemy');
+            this.defending = false;
+            this._endPlayerTurn();
+        }
+    }
+
+    /**
+     * Examine a target enemy to see their stats and skills.
+     */
+    playerExamine(targetIndex) {
+        if (!this.playerTurn || this.combatOver) return;
+        if (targetIndex !== undefined) this.targetIndex = targetIndex;
+        var enemy = this.enemies[this.targetIndex];
+        if (!enemy || !enemy.alive) return;
+        this.addLog('>> ' + enemy.getInfo(), 'info');
+        // Examine does NOT end the turn — player can still act.
+    }
+
+    // ------ Enemy turn processing ------
+
+    /**
+     * All alive enemies attack the player in order.
+     * Elite: 20% chance of double attack.
+     * Boss: uses special skills on cooldown, falls back to normal attack.
+     */
+    processEnemyTurn() {
+        var self = this;
+        for (var i = 0; i < this.enemies.length; i++) {
+            var enemy = this.enemies[i];
+            if (!enemy.alive) continue;
+
+            if (enemy.tier === 'boss') {
+                this._bossAttack(enemy, i);
+            } else if (enemy.tier === 'elite') {
+                this._eliteAttack(enemy, i);
+            } else {
+                this._normalAttack(enemy, i);
+            }
+
+            if (this.player.hp <= 0) {
+                this.player.hp = 0;
+                this._endCombat(false);
+                return;
+            }
+        }
+    }
+
+    /** Normal enemy: single attack. */
+    _normalAttack(enemy, index) {
+        var raw = enemy.atk - this.player.getTotalDef();
+        if (this.defending) raw = Math.floor(raw * 0.5);
+        var dmg = Math.max(1, raw);
+        this.player.hp -= dmg;
+        this.addLog(enemy.name + ' attacks you for ' + dmg + ' damage!', 'enemy');
+    }
+
+    /** Elite enemy: normal attack + 20% chance for a second hit. */
+    _eliteAttack(enemy, index) {
+        this._normalAttack(enemy, index);
+        if (this.player.hp <= 0) return;
+
+        if (Math.random() < 0.20) {
+            var raw = Math.floor(enemy.atk * 0.7) - this.player.getTotalDef();
+            if (this.defending) raw = Math.floor(raw * 0.5);
+            var dmg = Math.max(1, raw);
+            this.player.hp -= dmg;
+            this.addLog('  ' + enemy.name + ' strikes again for ' + dmg + '!', 'enemy');
+        }
+    }
+
+    /** Boss enemy: use skills on cooldown, otherwise normal attack. */
+    _bossAttack(enemy, index) {
+        var used = false;
+        for (var s = 0; s < enemy.skills.length; s++) {
+            if (enemy._skillTimers[s] <= 0) {
+                var skill = enemy.skills[s];
+                enemy._skillTimers[s] = skill.cooldown;
+                this._applyBossSkill(enemy, skill, index);
+                used = true;
+                break; // one skill per turn
+            }
+        }
+        if (!used) {
+            this._normalAttack(enemy, index);
+        }
+        // Tick down all cooldowns
+        for (var t = 0; t < enemy._skillTimers.length; t++) {
+            if (enemy._skillTimers[t] > 0) enemy._skillTimers[t]--;
+        }
+    }
+
+    /** Apply a boss skill effect. */
+    _applyBossSkill(enemy, skill, index) {
+        switch (skill.effect.type) {
+            case 'heavy': {
+                // Heavy single-target hit
+                var raw = (enemy.atk * (skill.effect.multiplier || 2)) - this.player.getTotalDef();
+                if (this.defending) raw = Math.floor(raw * 0.5);
+                var dmg = Math.max(1, Math.floor(raw));
+                this.player.hp -= dmg;
+                this.addLog(enemy.name + ' uses ' + skill.name + '! ' + dmg + ' damage!', 'enemy');
+                break;
+            }
+            case 'aoe': {
+                // AoE hits player (in single-combat, just one hit but undodgeable flavor)
+                var rawAoe = enemy.atk - this.player.getTotalDef();
+                if (this.defending) rawAoe = Math.floor(rawAoe * 0.5);
+                var dmgAoe = Math.max(1, Math.floor(rawAoe));
+                this.player.hp -= dmgAoe;
+                this.addLog(enemy.name + ' uses ' + skill.name + '! ' + dmgAoe + ' to all!', 'enemy');
+                break;
+            }
+            case 'heal': {
+                var healAmt = skill.effect.amount || Math.floor(enemy.maxHp * 0.2);
+                enemy.hp = Math.min(enemy.maxHp, enemy.hp + healAmt);
+                this.addLog(enemy.name + ' uses ' + skill.name + '! Heals ' + healAmt + ' HP!', 'heal');
+                break;
+            }
+            case 'debuff': {
+                // Temporarily reduces player def (flavor: stored in player._defDebuff)
+                var reduction = skill.effect.amount || 2;
+                if (!this.player._defDebuff) this.player._defDebuff = 0;
+                this.player._defDebuff += reduction;
+                this.addLog(enemy.name + ' uses ' + skill.name + '! Your DEF reduced by ' + reduction + '!', 'enemy');
+                break;
+            }
+            default: {
+                this._normalAttack(enemy, index);
+                break;
+            }
+        }
+    }
+
+    // ------ Victory / defeat checks ------
+
+    /** Returns true when all enemies are dead. */
+    checkVictory() {
+        for (var i = 0; i < this.enemies.length; i++) {
+            if (this.enemies[i].alive) return false;
+        }
+        return true;
+    }
+
+    /** Returns true when player HP <= 0. */
+    checkDefeat() {
+        return this.player.hp <= 0;
+    }
+
+    // ------ Rewards ------
+
+    /**
+     * Roll drops from all dead enemies' drop tables.
+     * Returns array of itemIds that dropped.
+     */
+    calculateDrops() {
+        var dropped = [];
+        for (var i = 0; i < this.enemies.length; i++) {
+            var enemy = this.enemies[i];
+            if (enemy.alive) continue;
+            for (var d = 0; d < enemy.drops.length; d++) {
+                var roll = enemy.drops[d];
+                if (Math.random() < roll.chance) {
+                    dropped.push(roll.itemId);
+                }
+            }
+        }
+        return dropped;
+    }
+
+    /**
+     * Sum XP rewards from all dead enemies.
+     * @returns {number}
+     */
+    calculateXP() {
+        var total = 0;
+        for (var i = 0; i < this.enemies.length; i++) {
+            if (!this.enemies[i].alive) {
+                total += this.enemies[i].xpReward;
+            }
+        }
+        return total;
+    }
+
+    // ------ Internal helpers ------
+
+    addLog(text, type) {
+        this.log.push({ text: text, color: LOG_COLORS[type] || LOG_COLORS.info });
+        // Keep last 50 entries
+        if (this.log.length > 50) this.log.shift();
+    }
+
+    _selectNextTarget() {
+        for (var i = 0; i < this.enemies.length; i++) {
+            if (this.enemies[i].alive) {
+                this.targetIndex = i;
+                return;
+            }
+        }
+    }
+
+    _endPlayerTurn() {
+        this.playerTurn = false;
+        var self = this;
+        // Short delay before enemies attack, so the player sees their action result
+        setTimeout(function() {
+            self.processEnemyTurn();
+            if (!self.combatOver) {
+                self.playerTurn = true;
+                // Clear temporary debuffs at end of round
+                if (self.player._defDebuff) {
+                    self.player._defDebuff = 0;
+                    self.addLog('Debuffs wore off.', 'info');
+                }
+            }
+        }, 600);
+    }
+
+    _endCombat(won) {
+        this.combatOver = true;
+        this.victory    = won;
+        var self = this;
+        if (won) {
+            var xp    = this.calculateXP();
+            var drops = this.calculateDrops();
+            this.addLog('Victory! Gained ' + xp + ' XP.', 'reward');
+            for (var i = 0; i < drops.length; i++) {
+                this.addLog('Dropped: ' + drops[i], 'reward');
+            }
+            setTimeout(function() {
+                self._running = false;
+                if (self.onCombatEnd) self.onCombatEnd(true, drops, xp);
+            }, 1200);
+        } else {
+            this.addLog('You have been defeated...', 'damage');
+            setTimeout(function() {
+                self._running = false;
+                if (self.onCombatEnd) self.onCombatEnd(false, [], 0);
+            }, 1200);
+        }
+    }
+
+    _spawnFloatingText(enemyIndex, text, color) {
+        // Calculate position relative to the enemy slot on canvas
+        var slot = this._getEnemySlotPosition(enemyIndex);
+        this.floatingTexts.push(new FloatingText(slot.x + 40, slot.y, text, color));
+    }
+
+    // ------ Game loop ------
+
+    _loop(timestamp) {
+        if (!this._running) return;
+        var dt = Math.min((timestamp - this._lastTime) / 1000, 0.1);
+        this._lastTime = timestamp;
+
+        // Update floating texts
+        for (var i = this.floatingTexts.length - 1; i >= 0; i--) {
+            this.floatingTexts[i].update(dt);
+            if (this.floatingTexts[i].dead) this.floatingTexts.splice(i, 1);
+        }
+
+        this._render();
+        requestAnimationFrame(function(t) { this._loop(t); }.bind(this));
+    }
+
+    // ------ Rendering ------
+
+    _render() {
+        var ctx  = this.ctx;
+        var W    = this.canvas.width;
+        var H    = this.canvas.height;
+        ctx.clearRect(0, 0, W, H);
+
+        // Background
+        ctx.fillStyle = '#111118';
+        ctx.fillRect(0, 0, W, H);
+
+        // Subtle grid pattern
+        ctx.strokeStyle = '#1a1a24';
+        for (var gx = 0; gx < W; gx += 40) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
+        for (var gy = 0; gy < H; gy += 40) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
+
+        this._drawEnemies(ctx);
+        this._drawPlayerPanel(ctx);
+        this._drawCombatLog(ctx);
+        this._drawActionButtons(ctx);
+
+        if (this.combatOver) {
+            this._drawEndOverlay(ctx);
+        }
+
+        // Floating texts on top
+        for (var f = 0; f < this.floatingTexts.length; f++) {
+            this.floatingTexts[f].draw(ctx);
+        }
+    }
+
+    /** Draw enemy sprites with HP bars and tier indicators. */
+    _drawEnemies(ctx) {
+        this.enemyAreas = [];
+        var aliveCount = 0;
+        for (var c = 0; c < this.enemies.length; c++) {
+            if (this.enemies[c].alive) aliveCount++;
+        }
+
+        var slotW = 120;
+        var totalW = aliveCount * slotW + (aliveCount - 1) * 12;
+        var startX = (this.canvas.width - totalW) / 2;
+        var y = 30;
+        var drawn = 0;
+
+        for (var i = 0; i < this.enemies.length; i++) {
+            var enemy = this.enemies[i];
+            if (!enemy.alive) continue;
+
+            var x = startX + drawn * (slotW + 12);
+            drawn++;
+
+            // Slot background
+            var isSelected = (i === this.targetIndex);
+            ctx.fillStyle = isSelected ? '#1e1e30' : '#16161e';
+            ctx.strokeStyle = isSelected ? '#ffdd44' : '#333';
+            ctx.lineWidth   = isSelected ? 2 : 1;
+            this._roundRect(ctx, x, y, slotW, 140, 6);
+
+            // Tier badge
+            if (enemy.tier !== 'normal') {
+                var badgeColor = enemy.tier === 'boss' ? '#ff2222' : '#ff8800';
+                ctx.fillStyle = badgeColor;
+                ctx.font = 'bold 10px "Courier New"';
+                ctx.textAlign = 'center';
+                ctx.fillText(enemy.tier.toUpperCase(), x + slotW / 2, y + 14);
+            }
+
+            // Icon (emoji)
+            ctx.font = '36px serif';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = enemy.alive ? '#fff' : '#555';
+            ctx.fillText(enemy.icon, x + slotW / 2, y + 56);
+
+            // Name
+            ctx.font = '12px "Courier New"';
+            ctx.fillStyle = '#ccc';
+            ctx.fillText(enemy.name, x + slotW / 2, y + 78);
+
+            // HP bar
+            var barX = x + 10;
+            var barY = y + 90;
+            var barW = slotW - 20;
+            var barH = 10;
+            var hpPct = enemy.hp / enemy.maxHp;
+
+            // Background
+            ctx.fillStyle = '#330000';
+            ctx.fillRect(barX, barY, barW, barH);
+            // Fill
+            var hpColor = hpPct > 0.5 ? '#44cc44' : hpPct > 0.25 ? '#cccc44' : '#cc4444';
+            ctx.fillStyle = hpColor;
+            ctx.fillRect(barX, barY, barW * hpPct, barH);
+            // Border
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(barX, barY, barW, barH);
+
+            // HP text
+            ctx.font = '10px "Courier New"';
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'center';
+            ctx.fillText(enemy.hp + '/' + enemy.maxHp, x + slotW / 2, barY + barH + 14);
+
+            // Stats line
+            ctx.fillStyle = '#888';
+            ctx.fillText('ATK:' + enemy.atk + ' DEF:' + enemy.def, x + slotW / 2, barY + barH + 28);
+
+            // Click target area
+            this.enemyAreas.push({ x: x, y: y, w: slotW, h: 140, index: i });
+        }
+    }
+
+    /** Draw player stats panel (bottom-left). */
+    _drawPlayerPanel(ctx) {
+        var px = 16;
+        var py = 340;
+        var pw = 200;
+        var ph = 120;
+
+        ctx.fillStyle = '#141420';
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 1;
+        this._roundRect(ctx, px, py, pw, ph, 6);
+
+        ctx.font = 'bold 14px "Courier New"';
+        ctx.fillStyle = '#ffdd44';
+        ctx.textAlign = 'left';
+        ctx.fillText('Lv.' + this.player.level + ' Adventurer', px + 10, py + 22);
+
+        // HP bar
+        var barX = px + 10;
+        var barY = py + 32;
+        var barW = pw - 20;
+        var barH = 14;
+        var hpPct = this.player.hp / this.player.maxHp;
+
+        ctx.fillStyle = '#330000';
+        ctx.fillRect(barX, barY, barW, barH);
+        var hpColor = hpPct > 0.5 ? '#44cc44' : hpPct > 0.25 ? '#cccc44' : '#cc4444';
+        ctx.fillStyle = hpColor;
+        ctx.fillRect(barX, barY, barW * hpPct, barH);
+        ctx.strokeStyle = '#555';
+        ctx.strokeRect(barX, barY, barW, barH);
+
+        ctx.font = '11px "Courier New"';
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.fillText('HP: ' + this.player.hp + ' / ' + this.player.maxHp, barX + barW / 2, barY + 11);
+
+        // ATK / DEF
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#aaa';
+        ctx.font = '12px "Courier New"';
+        ctx.fillText('ATK: ' + this.player.getTotalAtk() + '  DEF: ' + this.player.getTotalDef(), px + 10, py + 62);
+
+        // Status icons
+        var statusY = py + 80;
+        ctx.fillStyle = '#aaa';
+        ctx.font = '11px "Courier New"';
+        var statusText = '';
+        if (this.powered)   statusText += '[POWER UP] ';
+        if (this.defending) statusText += '[DEFENDING] ';
+        if (this.player._defDebuff) statusText += '[DEF-' + this.player._defDebuff + '] ';
+        if (statusText) {
+            ctx.fillStyle = '#ff8844';
+            ctx.fillText(statusText, px + 10, statusY);
+        }
+        if (!statusText) {
+            ctx.fillStyle = '#666';
+            ctx.fillText('No status effects', px + 10, statusY);
+        }
+
+        // Turn indicator
+        ctx.textAlign = 'right';
+        ctx.fillStyle = this.playerTurn ? '#44ff44' : '#ff4444';
+        ctx.font = 'bold 12px "Courier New"';
+        ctx.fillText(this.playerTurn ? '-- YOUR TURN --' : '-- ENEMY TURN --', px + pw - 10, py + ph - 10);
+    }
+
+    /** Draw combat log panel (right side). */
+    _drawCombatLog(ctx) {
+        var lx = 440;
+        var ly = 340;
+        var lw = 264;
+        var lh = 120;
+
+        ctx.fillStyle = '#141420';
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 1;
+        this._roundRect(ctx, lx, ly, lw, lh, 6);
+
+        ctx.font = 'bold 12px "Courier New"';
+        ctx.fillStyle = '#88aaff';
+        ctx.textAlign = 'left';
+        ctx.fillText('Combat Log', lx + 10, ly + 16);
+
+        // Show last N entries that fit
+        var maxVisible = 5;
+        var start = Math.max(0, this.log.length - maxVisible);
+        ctx.font = '11px "Courier New"';
+        ctx.textAlign = 'left';
+        for (var i = start; i < this.log.length; i++) {
+            var entry = this.log[i];
+            var lineY = ly + 32 + (i - start) * 17;
+            ctx.fillStyle = entry.color;
+            // Truncate long lines
+            var text = entry.text;
+            if (text.length > 38) text = text.substring(0, 35) + '...';
+            ctx.fillText(text, lx + 10, lineY);
+        }
+    }
+
+    /** Draw action buttons (bottom-center). */
+    _drawActionButtons(ctx) {
+        this.buttons = [];
+
+        var labels = ['Attack', 'Power Up', 'Defend', 'Examine', 'Flee'];
+        var actions = ['attack', 'power', 'defend', 'examine', 'flee'];
+        var btnW = 90;
+        var btnH = 36;
+        var gap = 12;
+        var totalW = labels.length * btnW + (labels.length - 1) * gap;
+        var startX = (this.canvas.width - totalW) / 2;
+        var y = 480;
+
+        var canAct = this.playerTurn && !this.combatOver;
+
+        for (var i = 0; i < labels.length; i++) {
+            var x = startX + i * (btnW + gap);
+
+            // Button background
+            ctx.fillStyle = canAct ? '#222240' : '#181818';
+            ctx.strokeStyle = canAct ? '#6666aa' : '#333';
+            ctx.lineWidth = 1;
+            this._roundRect(ctx, x, y, btnW, btnH, 4);
+
+            // Button label
+            ctx.font = 'bold 13px "Courier New"';
+            ctx.fillStyle = canAct ? '#ccccff' : '#555';
+            ctx.textAlign = 'center';
+            ctx.fillText(labels[i], x + btnW / 2, y + 23);
+
+            if (canAct) {
+                this.buttons.push({ x: x, y: y, w: btnW, h: btnH, action: actions[i] });
+            }
+        }
+
+        // Target selection hint
+        if (canAct && this.enemies.filter(function(e) { return e.alive; }).length > 1) {
+            ctx.font = '10px "Courier New"';
+            ctx.fillStyle = '#666';
+            ctx.textAlign = 'center';
+            ctx.fillText('Click an enemy to change target', this.canvas.width / 2, y - 6);
+        }
+    }
+
+    /** Draw end-of-combat overlay. */
+    _drawEndOverlay(ctx) {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        ctx.font = 'bold 42px "Courier New"';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = this.victory ? '#44ff44' : '#ff4444';
+        ctx.fillText(this.victory ? 'VICTORY' : 'DEFEAT', this.canvas.width / 2, 260);
+
+        ctx.font = '16px "Courier New"';
+        ctx.fillStyle = '#aaa';
+        if (this.victory) {
+            var xp = this.calculateXP();
+            var drops = this.calculateDrops();
+            ctx.fillText('XP gained: ' + xp, this.canvas.width / 2, 300);
+            if (drops.length > 0) {
+                ctx.fillText('Loot: ' + drops.join(', '), this.canvas.width / 2, 324);
+            }
+        } else {
+            ctx.fillText('The darkness claims another soul...', this.canvas.width / 2, 300);
+        }
+    }
+
+    // ------ Utility ------
+
+    /** Rounded rectangle helper. */
+    _roundRect(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+    }
+
+    /** Get the center position of an enemy slot for floating text placement. */
+    _getEnemySlotPosition(index) {
+        for (var i = 0; i < this.enemyAreas.length; i++) {
+            if (this.enemyAreas[i].index === index) {
+                return { x: this.enemyAreas[i].x + 60, y: this.enemyAreas[i].y + 50 };
+            }
+        }
+        return { x: this.canvas.width / 2, y: 80 };
+    }
+
+    // ------ Input handling ------
+
+    _onClick(e) {
+        var rect = this.canvas.getBoundingClientRect();
+        var scaleX = this.canvas.width / rect.width;
+        var scaleY = this.canvas.height / rect.height;
+        var mx = (e.clientX - rect.left) * scaleX;
+        var my = (e.clientY - rect.top) * scaleY;
+
+        // Check enemy targeting
+        for (var i = 0; i < this.enemyAreas.length; i++) {
+            var a = this.enemyAreas[i];
+            if (mx >= a.x && mx <= a.x + a.w && my >= a.y && my <= a.y + a.h) {
+                this.targetIndex = a.index;
+                return;
+            }
+        }
+
+        // Check action buttons
+        if (!this.playerTurn || this.combatOver) return;
+        for (var b = 0; b < this.buttons.length; b++) {
+            var btn = this.buttons[b];
+            if (mx >= btn.x && mx <= btn.x + btn.w && my >= btn.y && my <= btn.y + btn.h) {
+                this._dispatchAction(btn.action);
+                return;
+            }
+        }
+    }
+
+    _dispatchAction(action) {
+        switch (action) {
+            case 'attack':  this.playerAttack();    break;
+            case 'power':   this.playerPowerUp();   break;
+            case 'defend':  this.playerDefend();     break;
+            case 'examine': this.playerExamine();    break;
+            case 'flee':    this.playerFlee();       break;
+        }
+    }
+}
+
+// ==========================================================================
+// Demo: wire up the combat system with sample enemies
+// ==========================================================================
+
+(function demo() {
+    var canvas = document.getElementById('combat');
+    var combat = new CombatManager(canvas);
+
+    // Mock player stats (matches the game's G object structure)
+    var player = {
+        hp: 30, maxHp: 30, atk: 5, def: 4, level: 1, xp: 0,
+        _defDebuff: 0,
+        getTotalAtk: function() { return this.atk + (this._defDebuff ? 0 : 0); },
+        getTotalDef: function() { return Math.max(0, this.def - (this._defDebuff || 0)); }
+    };
+
+    // Create sample enemies for this encounter
+    var enemies = [
+        // A normal zombie
+        new Enemy({
+            name: 'Zombie', icon: '🧟',
+            hp: 18, atk: 3, def: 1,
+            xpReward: 8,
+            tier: 'normal',
+            drops: [
+                { itemId: 'rotten_flesh', chance: 0.5 },
+                { itemId: 'coin', chance: 0.3 }
+            ]
+        }),
+
+        // An elite skeleton
+        new Enemy({
+            name: 'Bone Lord', icon: '💀',
+            hp: 35, atk: 6, def: 3,
+            xpReward: 20,
+            tier: 'elite',
+            drops: [
+                { itemId: 'bone_sword', chance: 0.15 },
+                { itemId: 'shield_fragment', chance: 0.4 },
+                { itemId: 'coin', chance: 0.6 }
+            ]
+        }),
+
+        // A boss dragon
+        new Enemy({
+            name: 'Shadow Wyrm', icon: '🐲',
+            hp: 80, atk: 8, def: 4,
+            xpReward: 50,
+            tier: 'boss',
+            drops: [
+                { itemId: 'dragon_scale', chance: 0.8 },
+                { itemId: 'legendary_weapon', chance: 0.1 },
+                { itemId: 'hp_potion_large', chance: 0.5 }
+            ],
+            skills: [
+                { name: 'Flame Breath', cooldown: 3, effect: { type: 'heavy', multiplier: 2.0 } },
+                { name: 'Tail Sweep',   cooldown: 2, effect: { type: 'aoe' } },
+                { name: 'Dark Heal',    cooldown: 4, effect: { type: 'heal', amount: 15 } }
+            ]
+        })
+    ];
+
+    // Hook into combat end to show result in console
+    combat.onCombatEnd = function(won, drops, xp) {
+        console.log('Combat ended:', won ? 'VICTORY' : 'DEFEAT');
+        console.log('XP earned:', xp);
+        console.log('Drops:', drops);
+    };
+
+    // Start the combat
+    combat.startCombat(player, enemies);
+})();
+</script>
+</body>
+</html>

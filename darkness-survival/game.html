@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>黑暗生存 Darkness Survival</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0a;color:#ccc;font-family:'Microsoft YaHei',monospace;overflow:hidden;width:100vw;height:100vh}
+#app{width:100%;height:100%;position:relative}
+.scr{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center}
+.scr.on{display:flex}
+#menu{background:linear-gradient(180deg,#0a0a0a,#1a0a1a)}
+#menu h1{font-size:48px;color:#cc3333;text-shadow:0 0 20px #cc333366;margin-bottom:8px}
+#menu .sub{color:#888;margin-bottom:40px}
+.b{display:inline-block;padding:10px 24px;margin:6px;background:#1a1a1a;border:2px solid #cc3333;color:#ccc;font-size:16px;cursor:pointer;border-radius:4px;font-family:inherit}
+.b:hover{background:#2a1a1a;border-color:#ff5555;color:#fff}
+.b.s{border-color:#666}.b.s:hover{border-color:#999}
+.b.m{padding:6px 12px;font-size:13px;border-width:1px;pointer-events:auto;position:relative;z-index:60}
+canvas{width:100%;height:100%;image-rendering:pixelated}
+#hud{position:absolute;top:0;left:0;right:0;padding:6px 10px;display:flex;gap:10px;align-items:center;font-size:12px;z-index:10;background:linear-gradient(180deg,#000c,#0000)}
+.br{width:70px;height:8px;background:#1a1a1a;border-radius:3px;overflow:hidden;border:1px solid #333}
+.br>div{height:100%;border-radius:2px;transition:width .3s}
+.hp{background:#cc2222}.hu{background:#cc8822}.th{background:#2266cc}.tp{background:#22aaaa}.xp{background:#ccaa22}
+#diary{position:absolute;left:0;top:36px;bottom:46px;width:200px;padding:6px;background:#000b;border-right:1px solid #333;overflow-y:auto;font-size:11px;z-index:10}
+#diary div{padding:1px 0;border-bottom:1px solid #1a1a1a;color:#999}
+#act{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:center;gap:6px;padding:6px;background:#000c;z-index:10}
+.m{position:absolute;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:50;pointer-events:auto}
+.m>div{background:#111;border:2px solid #444;border-radius:8px;padding:16px;max-width:90vw;max-height:80vh;overflow-y:auto;min-width:300px;z-index:51;position:relative}
+.m.on{display:flex}
+.m h2{color:#cc3333;margin-bottom:10px;font-size:18px}
+.cl{float:right;background:none;border:1px solid #666;color:#999;cursor:pointer;padding:2px 8px;border-radius:3px}
+.cl:hover{border-color:#cc3333;color:#cc3333}
+.g{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;margin:8px 0}
+.sl{width:44px;height:44px;background:#1a1a1a;border:1px solid #333;border-radius:3px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;position:relative}
+.sl:hover{border-color:#888}
+.sl .n{position:absolute;bottom:0;right:2px;font-size:9px}
+.sl.c{border-color:#4A90D9}.sl.u{border-color:#66cc66}.sl.e{border-color:#D94A4A}.sl.l{border-color:#D9B84A}
+.eq{display:flex;gap:6px;margin-bottom:8px}
+.eq>div{text-align:center}
+.es{width:52px;height:52px;background:#1a1a1a;border:1px solid #555;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer}
+.dt{background:#0a0a0a;padding:10px;border-radius:4px;margin:6px 0;font-size:12px;line-height:1.6}
+.dt .nm{font-size:14px;font-weight:bold}
+.c1{color:#4A90D9}.c2{color:#D94A4A}.c3{color:#D9B84A}
+.cn{display:flex;gap:8px;justify-content:center;margin:8px 0;flex-wrap:wrap}
+.ec{background:#1a0a0a;border:1px solid #cc333344;border-radius:6px;padding:6px;text-align:center;min-width:70px}
+.ec.dead{opacity:.3}
+.ec .ei{font-size:28px}
+.ec .en{font-size:11px;color:#cc3333}
+.ec .eh{font-size:10px;color:#888}
+#cl{max-height:100px;overflow-y:auto;font-size:11px;margin:6px 0;padding:6px;background:#0a0a0a;border-radius:4px}
+.lg{padding:1px 0}.lg.d{color:#cc4444}.lg.h{color:#44cc44}.lg.i{color:#888}.lg.r{color:#ccaa22}
+.rl{margin:6px 0}.ri{display:flex;align-items:center;gap:6px;padding:4px;border-bottom:1px solid #1a1a1a;cursor:pointer}
+.ri:hover{background:#1a1a1a}.ri.sel{background:#2a1a1a}
+#death{background:linear-gradient(180deg,#0a0000,#1a0505)}
+#death h1{font-size:48px;color:#cc3333;margin-bottom:8px}
+#toast{position:absolute;bottom:56px;left:50%;transform:translateX(-50%);padding:6px 14px;background:#000e;border:1px solid #555;border-radius:4px;font-size:12px;color:#fff;z-index:100;display:none;white-space:nowrap}
+#dpad{position:absolute;bottom:46px;right:16px;width:120px;height:120px;z-index:15;display:none}
+@media(pointer:coarse){#dpad{display:block}}
+@media(max-width:600px){#dpad{display:block}}
+.dpad-btn{position:absolute;width:40px;height:40px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;color:rgba(255,255,255,0.5);user-select:none;-webkit-user-select:none;touch-action:manipulation;cursor:pointer}
+.dpad-btn:active{background:rgba(255,255,255,0.2);color:#fff}
+.dpad-up{left:40px;top:0}
+.dpad-down{left:40px;bottom:0}
+.dpad-left{left:0;top:40px}
+.dpad-right{right:0;top:40px}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;font-size:12px;margin:6px 0}
+</style></head><body><div id="app">
+
+<div id="menu" class="scr on"><h1>黑暗生存</h1><div class="sub">Darkness Survival - 探索地牢迷宫求生</div>
+<button class="b" onclick="go()">开始游戏</button>
+<button class="b s" id="cb" onclick="cont()" style="display:none">继续游戏</button>
+<div style="color:#666;margin-top:30px;font-size:12px">WASD/方向键/触屏 移动</div></div>
+
+<div id="gs" class="scr"><canvas id="cv"></canvas>
+<div id="hud"></div><div id="diary"></div>
+<div id="act"><button class="b m" onclick="oI()">🎒背包</button><button class="b m" onclick="oC()">⚒️制作</button>
+<button class="b m" onclick="oS()">🏪商店</button><button class="b m" onclick="oT()">📊属性</button>
+<button class="b m" onclick="oA()">🏆成就</button></div>
+<div id="dpad">
+  <div class="dpad-btn dpad-up" data-dx="0" data-dy="-1">▲</div>
+  <div class="dpad-btn dpad-left" data-dx="-1" data-dy="0">◀</div>
+  <div class="dpad-btn dpad-right" data-dx="1" data-dy="0">▶</div>
+  <div class="dpad-btn dpad-down" data-dx="0" data-dy="1">▼</div>
+</div></div>
+
+<div id="cm" class="m"><div style="min-width:360px"><h2>⚔️ 战斗</h2>
+<div id="ce" class="cn"></div><div id="cp" style="text-align:center;margin:6px 0;padding:6px;background:#0a1a0a;border-radius:6px"></div>
+<div id="cl"></div><div class="cn"><button class="b m" id="btnAtk">🗡️攻击</button><button class="b m" id="btnPow">💪强化</button>
+<button class="b m" id="btnDef">🛡️防御</button><button class="b m" id="btnFlee">🏃逃跑</button></div></div></div>
+
+<div id="im" class="m"><div style="min-width:380px"><button class="cl" onclick="xC('im')">✕</button><h2>🎒 背包</h2>
+<div id="eqRow"></div>
+<div class="g" id="ig"></div><div class="dt" id="id" style="display:none"></div>
+<div style="margin-top:6px"><button class="b m" id="bE" style="display:none" onclick="eS()">装备</button>
+<button class="b m" id="bU" style="display:none" onclick="uS()">使用</button>
+<button class="b m" id="bD" style="display:none" onclick="dS()">丢弃</button></div></div></div>
+
+<div id="crm" class="m"><div style="min-width:340px"><button class="cl" onclick="xC('crm')">✕</button><h2>⚒️ 制作</h2>
+<div id="rl" class="rl"></div><div class="dt" id="rd" style="display:none"></div>
+<button class="b m" id="bC" style="display:none;margin-top:6px" onclick="dC()">制作</button></div></div>
+
+<div id="sm" class="m"><div style="min-width:340px"><button class="cl" onclick="xC('sm')">✕</button><h2>🏪 商店</h2>
+<div style="margin-bottom:6px;font-size:12px"><span>💎<span id="sC">0</span></span>
+<span style="margin-left:10px">⭐<span id="sS">0</span></span>
+<span style="margin-left:10px">🦴<span id="sB">0</span></span></div>
+<div id="sl2"></div></div></div>
+
+<div id="stm" class="m"><div style="min-width:280px"><button class="cl" onclick="xC('stm')">✕</button><h2>📊 属性</h2>
+<div class="sg" id="sg2"></div></div></div>
+
+<div id="death" class="scr"><h1>你已死亡</h1><div class="sub">黑暗吞噬了你的灵魂...</div>
+<div id="dd" style="max-width:380px;margin-bottom:16px;padding:10px;background:#0a0a0a;border-radius:4px;font-size:12px;line-height:1.8;color:#888;text-align:center"></div>
+<div id="ds" style="color:#aaa;margin-bottom:20px;text-align:center;line-height:2"></div>
+<button class="b" onclick="go()">再次挑战</button><button class="b s" onclick="bm()">返回主菜单</button></div>
+
+<div id="am" class="m"><div style="min-width:340px"><button class="cl" onclick="xC('am')">✕</button><h2>🏆 成就</h2>
+<div id="al" style="font-size:13px;line-height:1.8"></div></div></div>
+
+<div id="toast"></div></div>
+<script src="game.js"></script>
+</body></html>
