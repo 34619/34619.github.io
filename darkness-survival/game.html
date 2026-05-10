@@ -189,6 +189,14 @@ canvas{width:100%;height:100%;image-rendering:pixelated;display:block}
 /* ═══ TOAST ═══ */
 #toast{position:absolute;bottom:52px;left:50%;transform:translateX(-50%);padding:5px 14px;background:rgba(0,0,0,0.9);border:1px solid #555;border-radius:3px;font-size:11px;color:#fff;z-index:100;display:none;white-space:nowrap}
 
+/* ═══ HOTBAR ═══ */
+#hotbar{position:absolute;bottom:50px;right:12px;display:flex;gap:3px;z-index:12}
+.hotbar-slot{width:42px;height:42px;background:rgba(20,20,20,0.85);border:1px solid #444;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;font-size:18px;transition:border-color 0.15s}
+.hotbar-slot:hover,.hotbar-slot:active{border-color:#cc3333}
+.hotbar-slot .hb-count{position:absolute;bottom:1px;right:3px;font-size:9px;color:#aaa}
+.hotbar-slot .hb-empty{font-size:10px;color:#444;font-family:monospace}
+@media(pointer:coarse){.hotbar-slot{width:48px;height:48px;font-size:20px}}
+
 /* ═══ SCROLLBAR ═══ */
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:#0a0a0a}
@@ -227,6 +235,7 @@ canvas{width:100%;height:100%;image-rendering:pixelated;display:block}
     <div id="joy-base"><div id="joy-knob"></div></div>
   </div>
   <div id="toast"></div>
+  <div id="hotbar"></div>
 </div>
 
 <!-- ═══ COMBAT ═══ -->
@@ -262,6 +271,7 @@ canvas{width:100%;height:100%;image-rendering:pixelated;display:block}
       <button class="item-btn" id="bU" style="display:none" onclick="doUse()">Use</button>
       <button class="item-btn" id="bD" style="display:none" onclick="doDrop()">Drop</button>
     </div>
+    <div id="bHB" style="display:none;margin-top:4px"></div>
   </div>
 </div>
 
